@@ -133,9 +133,7 @@ fn main() -> io::Result<()> {
 
     while !app.exit {
         terminal.draw(|frame| app.view(frame))?;
-        if let Event::Key(key) = event::read()? {
-            app.update(key.code);
-        }
+        if let Event::Key(key) = event::read()? { app.update(key.code); }
     }
 
     ratatui::restore();
