@@ -32,7 +32,7 @@ fn main() -> io::Result<()> {
                 .constraints([
                     Constraint::Length(1),
                     Constraint::Length(1),
-                    Constraint::Length(3),
+                    Constraint::Length(4),
                     Constraint::Length(1),
                     Constraint::Length(1),
                     Constraint::Length(1),
@@ -44,7 +44,7 @@ fn main() -> io::Result<()> {
 
             let description = Paragraph::new(
                 "NNote is a keyboard-first note taking app in your terminal\n\
-                Local markdown notes, simple, quick and lightweight\n\
+                Local markdown notes, simple, quick and lightweight\n\n\
                 Start by opening a vault"
             )
             .alignment(Alignment::Center);
