@@ -113,17 +113,38 @@ impl App {
     }
 
     fn vault_select(&self, frame: &mut ratatui::Frame) {
+        let area = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Percentage(60),
+                Constraint::Percentage(20),
+            ])
+            .split(frame.area())[1];
+
+        let area = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Percentage(60),
+                Constraint::Percentage(20),
+            ])
+            .split(area)[1];
+
         let items: Vec<ListItem> = self
             .vault_files
             .iter()
             .filter_map(|f| {
-                f.file_name().map(|name| ListItem::new(name.to_string_lossy().to_string()))
+                f.file_name().map(|name| {
+                    ListItem::new(name.to_string_lossy().to_string())
+                })
             })
             .collect();
 
-        let list = List::new(items).block(Block::bordered().title("Select a Vault"));
+        let list = List::new(items)
+            .block(Block::bordered().title("Select a Vault"));
 
-        frame.render_widget(list, frame.area());
+        frame.render_widget(list, area);
     }
 }
 
