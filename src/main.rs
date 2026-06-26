@@ -61,7 +61,7 @@ impl App {
                 }
             }
 
-            (AppState::VaultSelect, KeyCode::Char('m')) => {
+            (AppState::VaultSelect, KeyCode::Char('b')) => {
                 self.state = AppState::Menu;
                 self.list_state.select(None);
             }
@@ -152,8 +152,8 @@ impl App {
                         " to move ".into(),
                 ]))
                 .title_bottom(Line::from(vec![
-                        " m".bold(),
-                        " to open menu ".into(),
+                        " b".bold(),
+                        " to go back ".into(),
                 ]))
                 .title_bottom(Line::from(vec![
                         " q".bold(),
