@@ -146,7 +146,7 @@ impl App {
         let list = List::new(items)
             .block(
                 Block::bordered()
-                .title(" Select a Vault ")
+                .title(" Select a vault ")
                 .title_bottom(Line::from(vec![
                         " j/k".bold(),
                         " to move ".into(),
