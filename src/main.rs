@@ -3,10 +3,10 @@ use std::io;
 use walkdir::WalkDir;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
-    style::Stylize,
+    layout::{Alignment, Constraint, Direction, Layout, Margin},
+    style::{Color, Modifier, Stylize},
     text::Line,
-    widgets::{Block, ListItem, List, Paragraph},
+    widgets::{Block, ListItem, List, ListState, Paragraph},
 };
 
 enum AppState {
@@ -18,6 +18,7 @@ struct App {
     state: AppState,
     exit: bool,
     vault_files: Vec<std::path::PathBuf>, 
+    list_state: ListState,
 }
 
 impl App {
@@ -26,10 +27,11 @@ impl App {
             state: AppState::Menu,
             exit: false,
             vault_files: Vec::new(),
+            list_state: ListState::default(),
         }
     }
 
-    fn view(&self, frame: &mut ratatui::Frame) {
+    fn view(&mut self, frame: &mut ratatui::Frame) {
         match self.state {
             AppState::Menu => self.menu(frame),
             AppState::VaultSelect => self.vault_select(frame),
@@ -42,21 +44,34 @@ impl App {
 
             (AppState::Menu, KeyCode::Char('v')) => {
                 self.vault_files = WalkDir::new(".")
+                    .max_depth(1)
                     .into_iter()
-                    .filter_map(Result::ok)
-                    .filter_map(|e| {
-                        let name = e.file_name();
-                        if name.to_string_lossy().starts_with('.') {
-                            return None;
-                        }
-                        Some(e.into_path())
-                    })
+                    .filter_entry(|e| e.file_type().is_dir())
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path() != std::path::Path::new("."))
+                    .map(|e| e.into_path())
                     .collect();
+
                 self.state = AppState::VaultSelect;
+
+                if !self.vault_files.is_empty() {
+                    self.list_state.select(Some(0));
+                } else {
+                    self.list_state.select(None);
+                }
             }
 
             (AppState::VaultSelect, KeyCode::Char('m')) => {
                 self.state = AppState::Menu;
+                self.list_state.select(None);
+            }
+
+            (AppState::VaultSelect, KeyCode::Char('j')) => {
+                self.list_state.select_next();
+            }
+
+            (AppState::VaultSelect, KeyCode::Char('k')) => {
+                self.list_state.select_previous();
             }
 
             _ => {}
@@ -92,19 +107,19 @@ impl App {
              Local Markdown notes, simple, quick and lightweight\n\n\
              Start by opening a vault"
         )
-        .alignment(Alignment::Center);
+            .alignment(Alignment::Center);
 
         let vault_option = Paragraph::new(Line::from(vec![
-            "v".bold(),
-            " to open a vault".into(),
+                "v".bold(),
+                " to open a vault".into(),
         ]))
-        .alignment(Alignment::Center);
+            .alignment(Alignment::Center);
 
         let quit_option = Paragraph::new(Line::from(vec![
-            "q".bold(),
-            " to quit".into(),
+                "q".bold(),
+                " to quit".into(),
         ]))
-        .alignment(Alignment::Center);
+            .alignment(Alignment::Center);
 
         frame.render_widget(title, inner[0]);
         frame.render_widget(description, inner[2]);
@@ -112,24 +127,11 @@ impl App {
         frame.render_widget(quit_option, inner[5]);
     }
 
-    fn vault_select(&self, frame: &mut ratatui::Frame) {
-        let area = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(60),
-                Constraint::Percentage(20),
-            ])
-            .split(frame.area())[1];
-
-        let area = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(60),
-                Constraint::Percentage(20),
-            ])
-            .split(area)[1];
+    fn vault_select(&mut self, frame: &mut ratatui::Frame) {
+        let outer_padded_area = frame.area().inner(Margin {
+            horizontal: 30,
+            vertical: 6,
+        });
 
         let items: Vec<ListItem> = self
             .vault_files
@@ -139,12 +141,35 @@ impl App {
                     ListItem::new(name.to_string_lossy().to_string())
                 })
             })
-            .collect();
+        .collect();
 
         let list = List::new(items)
-            .block(Block::bordered().title("Select a Vault"));
+            .block(
+                Block::bordered()
+                .title(" Select a Vault ")
+                .title_bottom(Line::from(vec![
+                        " j/k".bold(),
+                        " to move ".into(),
+                ]))
+                .title_bottom(Line::from(vec![
+                        " m".bold(),
+                        " to open menu ".into(),
+                ]))
+                .title_bottom(Line::from(vec![
+                        " q".bold(),
+                        " to quit ".into(),
+                ]))
+                .title_alignment(Alignment::Center)
+            )
+            .highlight_style(
+                ratatui::style::Style::default()
+                .fg(Color::Black)
+                .bg(Color::Gray)
+                .add_modifier(Modifier::BOLD)
+            )
+            .highlight_symbol("-> ");
 
-        frame.render_widget(list, area);
+        frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
     }
 }
 
