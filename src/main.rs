@@ -81,7 +81,7 @@ impl App {
 
         let description = Paragraph::new(
             "NNote is a keyboard-first note taking app in your terminal\n\
-                Local markdown notes, simple, quick and lightweight\n\n\
+                Local Markdown notes, simple, quick and lightweight\n\n\
                 Start by opening a vault"
         )
             .alignment(Alignment::Center);
