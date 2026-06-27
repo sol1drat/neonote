@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, path::PathBuf};
 
 use walkdir::WalkDir;
 use crossterm::event::{self, Event, KeyCode};
@@ -17,8 +17,9 @@ enum AppState {
 struct App {
     state: AppState,
     exit: bool,
-    vault_files: Vec<std::path::PathBuf>, 
+    vault_files: Vec<PathBuf>, 
     list_state: ListState,
+    current_dir: PathBuf,
 }
 
 impl App {
@@ -28,6 +29,7 @@ impl App {
             exit: false,
             vault_files: Vec::new(),
             list_state: ListState::default(),
+            current_dir: PathBuf::default(),
         }
     }
 
@@ -38,32 +40,52 @@ impl App {
         }
     }
 
+    fn travdir(&mut self, dir_path: PathBuf) {
+        let mut files: Vec<PathBuf> = WalkDir::new(&dir_path)
+            .max_depth(1)
+            .into_iter()
+            .filter_entry(|e| e.file_type().is_dir())
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path() != dir_path.as_path())
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|name| !name.starts_with('.'))
+                    .unwrap_or(true)
+            })
+            .map(|e| e.into_path())
+            .collect();
+
+        files.sort();
+
+        self.vault_files = files;
+
+        if self.vault_files.is_empty() {
+            self.list_state.select(None);
+        } else {
+            self.list_state.select(Some(0));
+        }
+    }
+
     fn update(&mut self, key: KeyCode) {
         match (&self.state, key) {
             (_, KeyCode::Char('q')) => self.exit = true,
 
             (AppState::Menu, KeyCode::Char('v')) => {
-                self.vault_files = WalkDir::new(".")
-                    .max_depth(1)
-                    .into_iter()
-                    .filter_entry(|e| e.file_type().is_dir())
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.path() != std::path::Path::new("."))
-                    .map(|e| e.into_path())
-                    .collect();
-
-                self.state = AppState::VaultSelect;
-
-                if !self.vault_files.is_empty() {
-                    self.list_state.select(Some(0));
-                } else {
-                    self.list_state.select(None);
+                if let Ok(path) = std::env::current_dir() {
+                    self.current_dir = path;
                 }
+                self.travdir(self.current_dir.clone());
+                self.state = AppState::VaultSelect;
             }
 
-            (AppState::VaultSelect, KeyCode::Char('b')) => {
-                self.state = AppState::Menu;
-                self.list_state.select(None);
+            (AppState::VaultSelect, KeyCode::Char('h')) => {
+                if let Some(parent) = self.current_dir.parent() {
+                    self.current_dir = parent.to_path_buf();
+                    self.travdir(self.current_dir.clone());
+                    self.list_state.select(Some(0));
+                }
+
             }
 
             (AppState::VaultSelect, KeyCode::Char('j')) => {
@@ -72,6 +94,18 @@ impl App {
 
             (AppState::VaultSelect, KeyCode::Char('k')) => {
                 self.list_state.select_previous();
+            }
+
+            (AppState::VaultSelect, KeyCode::Char('l')) => {
+                if let Some(selected_index) = self.list_state.selected() {
+                    if let Some(dir_path) = self.vault_files.get(selected_index) {
+                        if let Ok(full_path) = std::fs::canonicalize(dir_path) {
+                            self.current_dir = full_path;
+                            self.travdir(self.current_dir.clone());
+                            self.list_state.select(Some(0));
+                        }
+                    }
+                }
             }
 
             _ => {}
@@ -146,14 +180,10 @@ impl App {
         let list = List::new(items)
             .block(
                 Block::bordered()
-                .title(" Select a vault ")
+                .title(format!(" Select a vault: {} ", self.current_dir.display()))
                 .title_bottom(Line::from(vec![
-                        " j/k".bold(),
+                        " h/j/k/l".bold(),
                         " to move ".into(),
-                ]))
-                .title_bottom(Line::from(vec![
-                        " b".bold(),
-                        " to go back ".into(),
                 ]))
                 .title_bottom(Line::from(vec![
                         " q".bold(),
