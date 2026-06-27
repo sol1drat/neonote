@@ -212,6 +212,7 @@ impl App {
         frame.render_widget(quit_option, inner[5]);
     }
 
+    // TODO: IMPROVE UX: ADD BOLDING TO TITLES, BETTER NAMING
     fn vault_select(&mut self, frame: &mut ratatui::Frame) {
         let outer_padded_area = frame.area().inner(Margin {
             horizontal: 30,
