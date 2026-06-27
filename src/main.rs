@@ -275,7 +275,7 @@ impl App {
         frame.render_widget(Clear, area);
 
         let block = Block::bordered()
-            .title(" Create a directory ")
+            .title(" Create a vault ")
             .title_bottom(Line::from(vec![
                     " Esc".bold(),
                     " to close ".into(),
