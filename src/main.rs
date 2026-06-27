@@ -235,7 +235,7 @@ impl App {
         let list = List::new(items)
             .block(
                 Block::bordered()
-                .title(format!(" Select a vault: {} ", self.current_dir.display()))
+                .title(format!(" Selected vault: {} ", self.current_dir.display()))
                 .title_bottom(Line::from(vec![
                         " h/j/k/l".bold(),
                         " to move ".into(),
@@ -278,7 +278,7 @@ impl App {
         frame.render_widget(Clear, area);
 
         let block = Block::bordered()
-            .title(" Create a vault ")
+            .title(" Create vault ")
             .title_bottom(Line::from(vec![
                     " Esc".bold(),
                     " to close ".into(),
