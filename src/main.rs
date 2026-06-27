@@ -3,11 +3,13 @@ use std::{io, path::PathBuf};
 use walkdir::WalkDir;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin},
-    style::{Color, Modifier, Stylize},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    style::{Color, Modifier, Stylize, Style},
     text::Line,
     widgets::{Block, ListItem, List, ListState, Paragraph, Clear},
 };
+
+// TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 
 enum AppState {
     Menu,
@@ -78,7 +80,8 @@ impl App {
 
     fn update(&mut self, key: KeyCode) {
         match (&self.state, key) {
-            (_, KeyCode::Char('q')) => self.exit = true,
+            (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
+            (AppState::VaultSelect, KeyCode::Char('q')) => self.exit = true,
 
             (AppState::Menu, KeyCode::Char('v')) => {
                 if let Ok(path) = std::env::current_dir() {
@@ -125,9 +128,8 @@ impl App {
                 self.state = AppState::VaultSelect;
             }
 
-            // WARN: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
-            // TODO: RESOLVE WARN
             (AppState::DirCreate, KeyCode::Enter) => {
+                // FIX: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
                 let new_dir = format!("{}/{}", self.current_dir.to_string_lossy(), self.input.clone());
                 let _ = std::fs::create_dir(new_dir);
                 self.travdir(self.current_dir.clone());
@@ -184,6 +186,8 @@ impl App {
                 Constraint::Length(1),
             ])
             .split(area);
+
+        // TODO: MOVE CONSTANTS TO DIFFERENT FILES
 
         let title = Paragraph::new("NeoNote".bold().blue()).alignment(Alignment::Center);
 
@@ -254,30 +258,60 @@ impl App {
         frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
     }
 
-
-    // TODO: RESOLVE CURSOR OVERFLOW
-    // TODO: IMPROVE UX OF DIR CREATOR
     fn dir_create(&mut self, frame: &mut ratatui::Frame) {
-        let padded_area = frame.area().inner(Margin {
-            horizontal: 45,
-            vertical: 16,
-        });
+        let height = 3u16;
+        let width = 40u16;
 
-        frame.render_widget(Clear, padded_area);
+        let x = frame.area().x + (frame.area().width.saturating_sub(width)) / 2;
+        let y = frame.area().y + (frame.area().height.saturating_sub(height)) / 2;
 
-        let input_paragraph = Paragraph::new(self.input.as_str())
-            .block(Block::bordered()
-                .title("Create a directory")
-                .title_bottom("Esc to close")
-                .title_bottom("Enter to create directory")
-                .title_alignment(Alignment::Center));
+        let area = Rect::new(
+            x, 
+            y, 
+            width.min(frame.area().width), 
+            height.min(frame.area().height)
+        );
 
-        frame.render_widget(input_paragraph, padded_area);
+        frame.render_widget(Clear, area);
 
-        let cursor_x = padded_area.x + self.cursor_position as u16 + 1; 
-        let cursor_y = padded_area.y + 1;
+        let block = Block::bordered()
+            .title(" Create a directory ")
+            .title_bottom(Line::from(vec![
+                    " Esc".bold(),
+                    " to close ".into(),
+            ]))
+            .title_bottom(Line::from(vec![
+                    " Enter".bold(),
+                    " to create ".into(),
+            ]))
+            .title_alignment(Alignment::Center);
 
-        frame.set_cursor_position((cursor_x, cursor_y));
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        let visible_width = inner.width as usize;
+        let mut cursor_offset = self.cursor_position.min(self.input.len());
+
+        let display_start = if cursor_offset > visible_width {
+            cursor_offset - visible_width
+        } else { 0 };
+
+        let chars: Vec<char> = self.input.chars().collect();
+        let display_end = (display_start + visible_width).min(chars.len());
+
+        let visible_text: String = chars[display_start..display_end].iter().collect();
+
+        cursor_offset -= display_start;
+        cursor_offset = cursor_offset.min(visible_width.saturating_sub(1));
+
+        let input = Paragraph::new(visible_text)
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(input, inner);
+
+        frame.set_cursor_position((
+                inner.x + cursor_offset as u16,
+                inner.y,
+        ));
     }
 }
 
