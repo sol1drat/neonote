@@ -12,6 +12,7 @@ use ratatui::{
 enum AppState {
     Menu,
     VaultSelect,
+    DirCreate,
 }
 
 struct App {
@@ -20,7 +21,6 @@ struct App {
     vault_files: Vec<PathBuf>, 
     list_state: ListState,
     current_dir: PathBuf,
-    creating_dir: bool,
     input: String,         
     cursor_position: usize,
 }
@@ -33,7 +33,6 @@ impl App {
             vault_files: Vec::new(),
             list_state: ListState::default(),
             current_dir: PathBuf::default(),
-            creating_dir: false,
             input: String::new(),
             cursor_position: 0,
         }
@@ -43,6 +42,10 @@ impl App {
         match self.state {
             AppState::Menu => self.menu(frame),
             AppState::VaultSelect => self.vault_select(frame),
+            AppState::DirCreate => {
+                self.vault_select(frame);
+                self.dir_create(frame);
+            }
         }
     }
 
@@ -114,33 +117,43 @@ impl App {
                 }
             }
 
-            (AppState::VaultSelect, KeyCode::Char('c')) if !self.creating_dir => {
-                self.creating_dir = true;
+            (AppState::VaultSelect, KeyCode::Char('c')) => {
+                self.state = AppState::DirCreate;
             }
 
-            (AppState::VaultSelect, KeyCode::Esc) if self.creating_dir => {
-                self.creating_dir = false;
+            (AppState::DirCreate, KeyCode::Esc) => {
+                self.state = AppState::VaultSelect;
             }
 
-            (AppState::VaultSelect, KeyCode::Char(c)) if self.creating_dir => {
+            // WARN: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
+            // TODO: RESOLVE WARN
+            (AppState::DirCreate, KeyCode::Enter) => {
+                let new_dir = format!("{}/{}", self.current_dir.to_string_lossy(), self.input.clone());
+                let _ = std::fs::create_dir(new_dir);
+                self.travdir(self.current_dir.clone());
+                self.list_state.select(Some(0));
+                self.state = AppState::VaultSelect;
+            }
+
+            (AppState::DirCreate, KeyCode::Char(c)) => {
                 self.input.insert(self.cursor_position, c);
                 self.cursor_position += 1;
             }
 
-            (AppState::VaultSelect, KeyCode::Backspace) if self.creating_dir => {
+            (AppState::DirCreate, KeyCode::Backspace) => {
                 if self.cursor_position > 0 {
                     self.input.remove(self.cursor_position - 1);
                     self.cursor_position -= 1;
                 }
             }
 
-            (AppState::VaultSelect, KeyCode::Left) => if self.creating_dir {
+            (AppState::DirCreate, KeyCode::Left) => {
                 if self.cursor_position > 0 {
                     self.cursor_position -= 1;
                 }
             }
 
-            (AppState::VaultSelect, KeyCode::Right) =>  if self.creating_dir {
+            (AppState::DirCreate, KeyCode::Right) => {
                 if self.cursor_position < self.input.len() {
                     self.cursor_position += 1;
                 }
@@ -238,28 +251,32 @@ impl App {
             .highlight_symbol("-> ");
 
         frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
+    }
 
-        if self.creating_dir {
-            let padded_area = frame.area().inner(Margin {
-                horizontal: 45,
-                vertical: 16,
-            });
 
-            frame.render_widget(Clear, padded_area);
+    // TODO: RESOLVE CURSOR OVERFLOW
+    // TODO: IMPROVE UX OF DIR CREATOR
+    fn dir_create(&mut self, frame: &mut ratatui::Frame) {
+        let padded_area = frame.area().inner(Margin {
+            horizontal: 45,
+            vertical: 16,
+        });
 
-            let input_paragraph = Paragraph::new(self.input.as_str())
-                .block(Block::bordered()
-                    .title("Create a directory")
-                    .title_bottom("Esc to close")
-                    .title_bottom("Enter to create a directory"));
+        frame.render_widget(Clear, padded_area);
 
-            frame.render_widget(input_paragraph, padded_area);
+        let input_paragraph = Paragraph::new(self.input.as_str())
+            .block(Block::bordered()
+                .title("Create a directory")
+                .title_bottom("Esc to close")
+                .title_bottom("Enter to create directory")
+                .title_alignment(Alignment::Center));
 
-            let cursor_x = padded_area.x + self.cursor_position as u16 + 1; 
-            let cursor_y = padded_area.y + 1;
+        frame.render_widget(input_paragraph, padded_area);
 
-            frame.set_cursor_position((cursor_x, cursor_y));
-        }
+        let cursor_x = padded_area.x + self.cursor_position as u16 + 1; 
+        let cursor_y = padded_area.y + 1;
+
+        frame.set_cursor_position((cursor_x, cursor_y));
     }
 }
 
