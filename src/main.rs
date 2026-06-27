@@ -241,6 +241,10 @@ impl App {
                         " to move ".into(),
                 ]))
                 .title_bottom(Line::from(vec![
+                        " c".bold(),
+                        " to create new vault ".into(),
+                ]))
+                .title_bottom(Line::from(vec![
                         " q".bold(),
                         " to quit ".into(),
                 ]))
