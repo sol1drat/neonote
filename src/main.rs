@@ -200,7 +200,7 @@ impl App {
 
         let vault_option = Paragraph::new(Line::from(vec![
                 "v".bold(),
-                " to open a vault".into(),
+                " to open vault".into(),
         ]))
             .alignment(Alignment::Center);
 
