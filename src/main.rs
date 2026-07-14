@@ -1,13 +1,14 @@
 use std::{io, path::PathBuf};
 
-use walkdir::WalkDir;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Color, Modifier, Stylize, Style},
+    style::{Color, Modifier, Style, Stylize},
     text::Line,
-    widgets::{Block, ListItem, List, ListState, Paragraph, Clear},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
+use walkdir::WalkDir;
 
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 
@@ -17,14 +18,20 @@ enum AppState {
     DirCreate,
 }
 
+struct ConfirmPrompt {
+    message: String,
+    pending_vault: PathBuf,
+}
+
 struct App {
     state: AppState,
     exit: bool,
-    vault_files: Vec<PathBuf>, 
+    vault_files: Vec<PathBuf>,
     list_state: ListState,
     current_dir: PathBuf,
-    input: String,         
+    input: String,
     cursor_position: usize,
+    confirm: Option<ConfirmPrompt>,
 }
 
 impl App {
@@ -37,10 +44,11 @@ impl App {
             current_dir: PathBuf::default(),
             input: String::new(),
             cursor_position: 0,
+            confirm: None,
         }
     }
 
-    fn view(&mut self, frame: &mut ratatui::Frame) {
+    fn view(&mut self, frame: &mut Frame) {
         match self.state {
             AppState::Menu => self.menu(frame),
             AppState::VaultSelect => self.vault_select(frame),
@@ -48,7 +56,46 @@ impl App {
                 self.vault_select(frame);
                 self.dir_create(frame);
             }
+            AppState::Note => self.note(frame),
         }
+
+        if let Some(prompt) = &self.confirm {
+            self.draw_confirm(frame, frame.area(), prompt);
+        }
+    }
+
+    fn centered_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+        let vertical = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ])
+            .split(r);
+
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ])
+            .split(vertical[1])[1]
+    }
+
+    fn draw_confirm(&self, frame: &mut Frame, area: Rect, prompt: &ConfirmPrompt) {
+        let popup = self.centered_rect(50, 20, area);
+
+        frame.render_widget(Clear, popup);
+
+        let text = format!("{}\n\n[Y] Yes    [N] No", prompt.message);
+
+        let widget = Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .block(Block::default().title("Confirm").borders(Borders::ALL));
+
+        frame.render_widget(widget, popup);
     }
 
     fn travdir(&mut self, dir_path: PathBuf) {
@@ -79,6 +126,21 @@ impl App {
     }
 
     fn update(&mut self, key: KeyCode) {
+        if let Some(prompt) = &self.confirm {
+            match key {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    self.current_vault = prompt.pending_vault.clone();
+                    self.confirm = None;
+                    self.state = AppState::Note;
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                    self.confirm = None;
+                }
+                _ => {}
+            }
+            return;
+        }
+
         match (&self.state, key) {
             (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
             (AppState::VaultSelect, KeyCode::Char('q')) => self.exit = true,
@@ -97,7 +159,6 @@ impl App {
                     self.travdir(self.current_dir.clone());
                     self.list_state.select(Some(0));
                 }
-
             }
 
             (AppState::VaultSelect, KeyCode::Char('j')) => {
@@ -112,9 +173,23 @@ impl App {
                 if let Some(selected_index) = self.list_state.selected() {
                     if let Some(dir_path) = self.vault_files.get(selected_index) {
                         if let Ok(full_path) = std::fs::canonicalize(dir_path) {
-                            self.current_dir = full_path;
+                            self.current_dir = full_path.clone();
                             self.travdir(self.current_dir.clone());
                             self.list_state.select(Some(0));
+                        }
+                    }
+                }
+            }
+
+            (AppState::VaultSelect, KeyCode::Enter) => {
+                if let Some(selected_index) = self.list_state.selected() {
+                    if let Some(dir_path) = self.vault_files.get(selected_index) {
+                        if let Ok(full_path) = std::fs::canonicalize(dir_path) {
+                            self.current_dir = full_path.clone();
+                            self.confirm = Some(ConfirmPrompt {
+                                message: format!("Use '{}' as your vault?", full_path.display()),
+                                pending_vault: full_path,
+                            })
                         }
                     }
                 }
@@ -130,7 +205,11 @@ impl App {
 
             (AppState::DirCreate, KeyCode::Enter) => {
                 // FIX: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
-                let new_dir = format!("{}/{}", self.current_dir.to_string_lossy(), self.input.clone());
+                let new_dir = format!(
+                    "{}/{}",
+                    self.current_dir.to_string_lossy(),
+                    self.input.clone()
+                );
                 let _ = std::fs::create_dir(new_dir);
                 self.travdir(self.current_dir.clone());
                 self.list_state.select(Some(0));
@@ -165,7 +244,7 @@ impl App {
         }
     }
 
-    fn menu(&self, frame: &mut ratatui::Frame) {
+    fn menu(&self, frame: &mut Frame) {
         let area = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -194,20 +273,14 @@ impl App {
         let description = Paragraph::new(
             "NNote is a keyboard-first note taking app in your terminal\n\
              Local Markdown notes, simple, quick and lightweight\n\n\
-             Start by opening a vault"
+             Start by opening a vault",
         )
+        .alignment(Alignment::Center);
+
+        let vault_option = Paragraph::new(Line::from(vec!["v".bold(), " to open vault".into()]))
             .alignment(Alignment::Center);
 
-        let vault_option = Paragraph::new(Line::from(vec![
-                "v".bold(),
-                " to open vault".into(),
-        ]))
-            .alignment(Alignment::Center);
-
-        let quit_option = Paragraph::new(Line::from(vec![
-                "q".bold(),
-                " to quit".into(),
-        ]))
+        let quit_option = Paragraph::new(Line::from(vec!["q".bold(), " to quit".into()]))
             .alignment(Alignment::Center);
 
         frame.render_widget(title, inner[0]);
@@ -216,7 +289,7 @@ impl App {
         frame.render_widget(quit_option, inner[5]);
     }
 
-    fn vault_select(&mut self, frame: &mut ratatui::Frame) {
+    fn vault_select(&mut self, frame: &mut Frame) {
         let outer_padded_area = frame.area().inner(Margin {
             horizontal: 30,
             vertical: 6,
@@ -226,42 +299,39 @@ impl App {
             .vault_files
             .iter()
             .filter_map(|f| {
-                f.file_name().map(|name| {
-                    ListItem::new(name.to_string_lossy().to_string())
-                })
+                f.file_name()
+                    .map(|name| ListItem::new(name.to_string_lossy().to_string()))
             })
-        .collect();
+            .collect();
 
         let list = List::new(items)
             .block(
                 Block::bordered()
-                .title(format!(" Selected vault: {} ", self.current_dir.display()))
-                .title_bottom(Line::from(vec![
-                        " h/j/k/l".bold(),
-                        " to move ".into(),
-                ]))
-                .title_bottom(Line::from(vec![
+                    .title(format!(" Path: {} ", self.current_dir.display()))
+                    .title_bottom(Line::from(vec![" h/j/k/l".bold(), " to move ".into()]))
+                    .title_bottom(Line::from(vec![
                         " c".bold(),
                         " to create new vault ".into(),
-                ]))
-                .title_bottom(Line::from(vec![
-                        " q".bold(),
-                        " to quit ".into(),
-                ]))
-                .title_alignment(Alignment::Center)
+                    ]))
+                    .title_bottom(Line::from(vec![
+                        " Enter".bold(),
+                        " to select vault ".into(),
+                    ]))
+                    .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
+                    .title_alignment(Alignment::Center),
             )
             .highlight_style(
                 ratatui::style::Style::default()
-                .fg(Color::Black)
-                .bg(Color::Gray)
-                .add_modifier(Modifier::BOLD)
+                    .fg(Color::Black)
+                    .bg(Color::Gray)
+                    .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol("-> ");
 
         frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
     }
 
-    fn dir_create(&mut self, frame: &mut ratatui::Frame) {
+    fn dir_create(&mut self, frame: &mut Frame) {
         let height = 3u16;
         let width = 45u16;
 
@@ -269,24 +339,18 @@ impl App {
         let y = frame.area().y + (frame.area().height.saturating_sub(height)) / 2;
 
         let area = Rect::new(
-            x, 
-            y, 
-            width.min(frame.area().width), 
-            height.min(frame.area().height)
+            x,
+            y,
+            width.min(frame.area().width),
+            height.min(frame.area().height),
         );
 
         frame.render_widget(Clear, area);
 
         let block = Block::bordered()
             .title(" Create vault ")
-            .title_bottom(Line::from(vec![
-                    " Esc".bold(),
-                    " to close ".into(),
-            ]))
-            .title_bottom(Line::from(vec![
-                    " Enter".bold(),
-                    " to create ".into(),
-            ]))
+            .title_bottom(Line::from(vec![" Esc".bold(), " to close ".into()]))
+            .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
             .title_alignment(Alignment::Center);
 
         let inner = block.inner(area);
@@ -297,7 +361,9 @@ impl App {
 
         let display_start = if cursor_offset > visible_width {
             cursor_offset - visible_width
-        } else { 0 };
+        } else {
+            0
+        };
 
         let chars: Vec<char> = self.input.chars().collect();
         let display_end = (display_start + visible_width).min(chars.len());
@@ -307,14 +373,49 @@ impl App {
         cursor_offset -= display_start;
         cursor_offset = cursor_offset.min(visible_width.saturating_sub(1));
 
-        let input = Paragraph::new(visible_text)
-            .style(Style::default().fg(Color::Yellow));
+        let input = Paragraph::new(visible_text).style(Style::default().fg(Color::Yellow));
         frame.render_widget(input, inner);
 
-        frame.set_cursor_position((
-                inner.x + cursor_offset as u16,
-                inner.y,
-        ));
+        frame.set_cursor_position((inner.x + cursor_offset as u16, inner.y));
+    }
+
+    fn note(&mut self, frame: &mut Frame) {
+        let area = Rect::new(0, 0, frame.area().width, frame.area().height);
+
+        let items: Vec<ListItem> = self
+            .vault_files
+            .iter()
+            .filter_map(|f| {
+                f.file_name()
+                    .map(|name| ListItem::new(name.to_string_lossy().to_string()))
+            })
+            .collect();
+
+        let list = List::new(items)
+            .block(
+                Block::bordered()
+                    .title(format!(" Path: {} ", self.current_dir.display()))
+                    .title_bottom(Line::from(vec![" h/j/k/l".bold(), " to move ".into()]))
+                    .title_bottom(Line::from(vec![
+                        " c".bold(),
+                        " to create new vault ".into(),
+                    ]))
+                    .title_bottom(Line::from(vec![
+                        " Enter".bold(),
+                        " to select vault ".into(),
+                    ]))
+                    .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
+                    .title_alignment(Alignment::Center),
+            )
+            .highlight_style(
+                ratatui::style::Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Gray)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("-> ");
+
+        frame.render_widget(list, area);
     }
 }
 
@@ -324,7 +425,9 @@ fn main() -> io::Result<()> {
 
     while !app.exit {
         terminal.draw(|frame| app.view(frame))?;
-        if let Event::Key(key) = event::read()? { app.update(key.code); }
+        if let Event::Key(key) = event::read()? {
+            app.update(key.code);
+        }
     }
 
     ratatui::restore();
