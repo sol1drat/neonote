@@ -316,7 +316,7 @@ impl App {
                         if let Ok(full_path) = std::fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.confirm = Some(ConfirmPrompt {
-                                message: format!("Use '{}' as your vault?", full_path.display()),
+                                message: format!("Open {} as a vault?", full_path.display()),
                                 pending_vault: full_path,
                             })
                         }
@@ -447,8 +447,13 @@ impl App {
             .vault_files
             .iter()
             .filter_map(|f| {
-                f.file_name()
-                    .map(|name| ListItem::new(name.to_string_lossy().to_string()))
+                f.file_name().map(|name| {
+                    ListItem::new(name.to_string_lossy().to_string()).style(
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                })
             })
             .collect();
 
