@@ -3,7 +3,7 @@
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
 
-use std::{io, path::PathBuf};
+use std::{fs, io, path::PathBuf};
 
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
@@ -11,7 +11,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use walkdir::WalkDir;
 
@@ -52,6 +52,7 @@ struct App {
     cursor_position: usize,
     confirm: Option<ConfirmPrompt>,
     note_files: Vec<NoteItem>,
+    editor_content: String,
 }
 
 impl App {
@@ -67,6 +68,7 @@ impl App {
             cursor_position: 0,
             confirm: None,
             note_files: Vec::new(),
+            editor_content: String::new(),
         }
     }
 
@@ -149,7 +151,7 @@ impl App {
 
     fn load_note_items(&mut self) {
         let mut items = Vec::new();
-        if let Ok(read_dir) = std::fs::read_dir(&self.current_vault) {
+        if let Ok(read_dir) = fs::read_dir(&self.current_vault) {
             for entry in read_dir.flatten() {
                 let path = entry.path();
                 if path
@@ -179,6 +181,7 @@ impl App {
             )
         });
         self.note_files = items;
+        self.editor_content.clear();
 
         if self.note_files.is_empty() {
             self.list_state.select(None);
@@ -210,7 +213,7 @@ impl App {
             let depth = self.note_files[index].depth + 1;
 
             let mut new_items = Vec::new();
-            if let Ok(read_dir) = std::fs::read_dir(&path) {
+            if let Ok(read_dir) = fs::read_dir(&path) {
                 for entry in read_dir.flatten() {
                     let child_path = entry.path();
                     if child_path
@@ -306,7 +309,7 @@ impl App {
             (AppState::VaultSelect, KeyCode::Char('l')) => {
                 if let Some(selected_index) = self.list_state.selected() {
                     if let Some(dir_path) = self.vault_files.get(selected_index) {
-                        if let Ok(full_path) = std::fs::canonicalize(dir_path) {
+                        if let Ok(full_path) = fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.travdir(self.current_dir.clone());
                             self.list_state.select(Some(0));
@@ -318,7 +321,7 @@ impl App {
             (AppState::VaultSelect, KeyCode::Enter) => {
                 if let Some(selected_index) = self.list_state.selected() {
                     if let Some(dir_path) = self.vault_files.get(selected_index) {
-                        if let Ok(full_path) = std::fs::canonicalize(dir_path) {
+                        if let Ok(full_path) = fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.confirm = Some(ConfirmPrompt {
                                 message: format!("Open {} as a vault?", full_path.display()),
@@ -337,6 +340,11 @@ impl App {
                 self.state = AppState::VaultSelect;
             }
 
+<<<<<<< HEAD
+=======
+            // TODO: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY AND USER IS NOT WARNED IN CASE
+            // OF BAD INPUT
+>>>>>>> 6d41910 (Editor implementation and fixes)
             (AppState::DirCreate, KeyCode::Enter) => {
                 // FIX: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
                 let new_dir = format!(
@@ -344,10 +352,14 @@ impl App {
                     self.current_dir.to_string_lossy(),
                     self.input.clone()
                 );
-                let _ = std::fs::create_dir(new_dir);
+                let _ = fs::create_dir(new_dir);
+
                 self.travdir(self.current_dir.clone());
                 self.list_state.select(Some(0));
                 self.state = AppState::VaultSelect;
+
+                self.input.clear();
+                self.cursor_position = 0;
             }
 
             (AppState::DirCreate, KeyCode::Char(c)) => {
@@ -387,7 +399,10 @@ impl App {
                         if item.is_dir {
                             self.toggle_expand(selected_index);
                         } else {
-                            // TODO: OPEN FILE IN EDITOR
+                            if let Ok(contents) = fs::read_to_string(&item.path) {
+                                self.editor_content = contents;
+                                self.focused_tab = FocusedTab::Editor;
+                            }
                         }
                     }
                 }
@@ -479,7 +494,7 @@ impl App {
                     .title_alignment(Alignment::Center),
             )
             .highlight_style(
-                ratatui::style::Style::default()
+                Style::default()
                     .fg(Color::Black)
                     .bg(Color::Gray)
                     .add_modifier(Modifier::BOLD),
@@ -649,7 +664,11 @@ impl App {
                     .title(" Editor ")
                     .border_style(Style::default().fg(Color::Reset));
 
-                frame.render_widget(content_block, content_area);
+                let text_content = Paragraph::new(self.editor_content.clone())
+                    .block(content_block)
+                    .wrap(Wrap { trim: false });
+
+                frame.render_widget(text_content, content_area);
             }
         }
     }
