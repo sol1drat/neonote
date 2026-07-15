@@ -28,6 +28,14 @@ struct ConfirmPrompt {
     pending_vault: PathBuf,
 }
 
+#[derive(Clone)]
+struct NoteItem {
+    path: PathBuf,
+    depth: usize,
+    is_dir: bool,
+    expanded: bool,
+}
+
 struct App {
     state: AppState,
     focused_tab: FocusedTab,
@@ -38,6 +46,7 @@ struct App {
     input: String,
     cursor_position: usize,
     confirm: Option<ConfirmPrompt>,
+    note_files: Vec<NoteItem>,
 }
 
 impl App {
@@ -52,6 +61,7 @@ impl App {
             input: String::new(),
             cursor_position: 0,
             confirm: None,
+            note_files: Vec::new(),
         }
     }
 
@@ -132,28 +142,101 @@ impl App {
         }
     }
 
-    fn travdir_notes(&mut self, dir_path: PathBuf) {
-        let mut files: Vec<PathBuf> = WalkDir::new(&dir_path)
-            .max_depth(1)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path() != dir_path.as_path())
-            .filter(|e| {
-                e.file_name()
-                    .to_str()
-                    .map(|name| !name.starts_with('.'))
-                    .unwrap_or(true)
-            })
-            .map(|e| e.into_path())
-            .collect();
+    fn load_note_items(&mut self) {
+        let mut items = Vec::new();
+        if let Ok(read_dir) = std::fs::read_dir(&self.current_vault) {
+            for entry in read_dir.flatten() {
+                let path = entry.path();
+                if path
+                    .file_name()
+                    .map_or(false, |n| n.to_str().map_or(false, |s| s.starts_with('.')))
+                {
+                    continue;
+                }
 
-        files.sort();
-        self.vault_files = files;
+                let is_dir = path.is_dir();
 
-        if self.vault_files.is_empty() {
+                items.push(NoteItem {
+                    path,
+                    depth: 0,
+                    is_dir,
+                    expanded: false,
+                });
+            }
+        }
+
+        items.sort_by_key(|i| {
+            (
+                !i.is_dir,
+                i.path
+                    .file_name()
+                    .map_or(String::new(), |n| n.to_string_lossy().to_string()),
+            )
+        });
+        self.note_files = items;
+
+        if self.note_files.is_empty() {
             self.list_state.select(None);
         } else {
             self.list_state.select(Some(0));
+        }
+    }
+
+    fn toggle_expand(&mut self, index: usize) {
+        if index >= self.note_files.len() {
+            return;
+        }
+
+        let is_expanded = self.note_files[index].expanded;
+        if is_expanded {
+            let current_depth = self.note_files[index].depth;
+            self.note_files[index].expanded = false;
+
+            let i = index + 1;
+            while i < self.note_files.len() {
+                if self.note_files[i].depth <= current_depth {
+                    break;
+                }
+                self.note_files.remove(i);
+            }
+        } else {
+            self.note_files[index].expanded = true;
+            let path = self.note_files[index].path.clone();
+            let depth = self.note_files[index].depth + 1;
+
+            let mut new_items = Vec::new();
+            if let Ok(read_dir) = std::fs::read_dir(&path) {
+                for entry in read_dir.flatten() {
+                    let child_path = entry.path();
+                    if child_path
+                        .file_name()
+                        .map_or(false, |n| n.to_str().map_or(false, |s| s.starts_with('.')))
+                    {
+                        continue;
+                    }
+
+                    let is_dir = child_path.is_dir();
+
+                    new_items.push(NoteItem {
+                        path: child_path,
+                        depth,
+                        is_dir,
+                        expanded: false,
+                    });
+                }
+            }
+            new_items.sort_by_key(|i| {
+                (
+                    !i.is_dir,
+                    i.path
+                        .file_name()
+                        .map_or(String::new(), |n| n.to_string_lossy().to_string()),
+                )
+            });
+
+            for (offset, item) in new_items.into_iter().enumerate() {
+                self.note_files.insert(index + 1 + offset, item);
+            }
         }
     }
 
@@ -162,7 +245,7 @@ impl App {
             match key {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                     self.current_vault = prompt.pending_vault.clone();
-                    self.travdir_notes(self.current_dir.clone());
+                    self.load_note_items();
                     self.confirm = None;
                     self.state = AppState::Note;
                 }
@@ -293,6 +376,18 @@ impl App {
                 };
             }
 
+            (AppState::Note, KeyCode::Enter) => {
+                if let Some(selected_index) = self.list_state.selected() {
+                    if let Some(item) = self.note_files.get(selected_index) {
+                        if item.is_dir {
+                            self.toggle_expand(selected_index);
+                        } else {
+                            // TODO: OPEN FILE IN EDITOR
+                        }
+                    }
+                }
+            }
+
             _ => {}
         }
     }
@@ -379,7 +474,7 @@ impl App {
                     .bg(Color::Gray)
                     .add_modifier(Modifier::BOLD),
             )
-            .highlight_symbol("-> ");
+            .highlight_symbol(" -> ");
 
         frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
     }
@@ -450,13 +545,32 @@ impl App {
         match self.focused_tab {
             FocusedTab::Explorer => {
                 let items: Vec<ListItem> = self
-                    .vault_files
+                    .note_files
                     .iter()
-                    .filter_map(|f| {
-                        f.file_name().map(|name| {
-                            ListItem::new(name.to_string_lossy().to_string())
-                                .style(Style::default().fg(Color::Reset))
-                        })
+                    .map(|item| {
+                        let indent = "  ".repeat(item.depth);
+                        let name = item
+                            .path
+                            .file_name()
+                            .map_or(String::new(), |n| n.to_string_lossy().to_string());
+
+                        let symbol = if item.is_dir {
+                            if item.expanded { "▾ " } else { "▸ " }
+                        } else {
+                            "  "
+                        };
+
+                        let text = format!("{}{}{}", indent, symbol, name);
+
+                        let style = if item.is_dir {
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::Reset)
+                        };
+
+                        ListItem::new(text).style(style)
                     })
                     .collect();
 
@@ -467,7 +581,6 @@ impl App {
                             .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
                             .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
                             .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                            .title_alignment(Alignment::Center)
                             .border_style(Style::default().fg(Color::Reset)),
                     )
                     .highlight_style(
@@ -476,7 +589,7 @@ impl App {
                             .bg(Color::Gray)
                             .add_modifier(Modifier::BOLD),
                     )
-                    .highlight_symbol("-> ");
+                    .highlight_symbol("  ");
 
                 frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
 
@@ -488,13 +601,24 @@ impl App {
             }
             FocusedTab::Editor => {
                 let items: Vec<ListItem> = self
-                    .vault_files
+                    .note_files
                     .iter()
-                    .filter_map(|f| {
-                        f.file_name().map(|name| {
-                            ListItem::new(name.to_string_lossy().to_string())
-                                .style(Style::default().fg(Color::DarkGray))
-                        })
+                    .map(|item| {
+                        let indent = "  ".repeat(item.depth);
+                        let name = item
+                            .path
+                            .file_name()
+                            .map_or(String::new(), |n| n.to_string_lossy().to_string());
+
+                        let symbol = if item.is_dir {
+                            if item.expanded { "▾ " } else { "▸ " }
+                        } else {
+                            "  "
+                        };
+
+                        let text = format!("{}{}{}", indent, symbol, name);
+
+                        ListItem::new(text).style(Style::default().fg(Color::DarkGray))
                     })
                     .collect();
 
@@ -508,7 +632,7 @@ impl App {
                             .title_alignment(Alignment::Center)
                             .border_style(Style::default().fg(Color::DarkGray)),
                     )
-                    .highlight_symbol("   ");
+                    .highlight_symbol("  ");
 
                 frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
 
