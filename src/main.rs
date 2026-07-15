@@ -18,6 +18,11 @@ enum AppState {
     DirCreate,
 }
 
+enum FocusedTab {
+    Explorer,
+    Editor,
+}
+
 struct ConfirmPrompt {
     message: String,
     pending_vault: PathBuf,
@@ -25,6 +30,7 @@ struct ConfirmPrompt {
 
 struct App {
     state: AppState,
+    focused_tab: FocusedTab,
     exit: bool,
     vault_files: Vec<PathBuf>,
     list_state: ListState,
@@ -38,6 +44,7 @@ impl App {
     fn new() -> Self {
         Self {
             state: AppState::Menu,
+            focused_tab: FocusedTab::Explorer,
             exit: false,
             vault_files: Vec::new(),
             list_state: ListState::default(),
@@ -144,6 +151,7 @@ impl App {
         match (&self.state, key) {
             (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
             (AppState::VaultSelect, KeyCode::Char('q')) => self.exit = true,
+            (AppState::Note, KeyCode::Char('q')) => self.exit = true,
 
             (AppState::Menu, KeyCode::Char('v')) => {
                 if let Ok(path) = std::env::current_dir() {
@@ -161,11 +169,11 @@ impl App {
                 }
             }
 
-            (AppState::VaultSelect, KeyCode::Char('j')) => {
+            (AppState::VaultSelect | AppState::Note, KeyCode::Char('j')) => {
                 self.list_state.select_next();
             }
 
-            (AppState::VaultSelect, KeyCode::Char('k')) => {
+            (AppState::VaultSelect | AppState::Note, KeyCode::Char('k')) => {
                 self.list_state.select_previous();
             }
 
@@ -238,6 +246,13 @@ impl App {
                 if self.cursor_position < self.input.len() {
                     self.cursor_position += 1;
                 }
+            }
+
+            (AppState::Note, KeyCode::Tab) => {
+                self.focused_tab = match self.focused_tab {
+                    FocusedTab::Explorer => FocusedTab::Editor,
+                    FocusedTab::Editor => FocusedTab::Explorer,
+                };
             }
 
             _ => {}
@@ -380,42 +395,65 @@ impl App {
     }
 
     fn note(&mut self, frame: &mut Frame) {
-        let area = Rect::new(0, 0, frame.area().width, frame.area().height);
+        let get_explorer_color = |focus: &FocusedTab| match focus {
+            FocusedTab::Editor => Color::DarkGray,
+            FocusedTab::Explorer => Color::Blue,
+        };
+        let get_editor_color = |focus: &FocusedTab| match focus {
+            FocusedTab::Editor => Color::Blue,
+            FocusedTab::Explorer => Color::DarkGray,
+        };
+
+        let outer = frame.area();
+
+        let outer_block = Block::bordered()
+            .title(" NeoNote ")
+            .title_alignment(Alignment::Center);
+
+        let inner = outer_block.inner(outer);
+        frame.render_widget(outer_block, outer);
+
+        let [explorer_area, content_area] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+            .areas(inner);
 
         let items: Vec<ListItem> = self
             .vault_files
             .iter()
             .filter_map(|f| {
-                f.file_name()
-                    .map(|name| ListItem::new(name.to_string_lossy().to_string()))
+                f.file_name().map(|name| {
+                    ListItem::new(name.to_string_lossy().to_string())
+                        .style(Style::default().fg(get_explorer_color(&self.focused_tab)))
+                })
             })
             .collect();
 
         let list = List::new(items)
             .block(
                 Block::bordered()
-                    .title(format!(" Path: {} ", self.current_dir.display()))
-                    .title_bottom(Line::from(vec![" h/j/k/l".bold(), " to move ".into()]))
-                    .title_bottom(Line::from(vec![
-                        " c".bold(),
-                        " to create new vault ".into(),
-                    ]))
-                    .title_bottom(Line::from(vec![
-                        " Enter".bold(),
-                        " to select vault ".into(),
-                    ]))
+                    .title(" Explorer ")
+                    .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
+                    .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
                     .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                    .title_alignment(Alignment::Center),
+                    .title_alignment(Alignment::Center)
+                    .border_style(Style::default().fg(get_explorer_color(&self.focused_tab))),
             )
             .highlight_style(
-                ratatui::style::Style::default()
+                Style::default()
                     .fg(Color::Black)
                     .bg(Color::Gray)
                     .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol("-> ");
 
-        frame.render_widget(list, area);
+        frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
+
+        let content_block = Block::bordered()
+            .title(" Note ")
+            .border_style(Style::default().fg(get_editor_color(&self.focused_tab)));
+
+        frame.render_widget(content_block, content_area);
     }
 }
 
