@@ -132,11 +132,37 @@ impl App {
         }
     }
 
+    fn travdir_notes(&mut self, dir_path: PathBuf) {
+        let mut files: Vec<PathBuf> = WalkDir::new(&dir_path)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path() != dir_path.as_path())
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|name| !name.starts_with('.'))
+                    .unwrap_or(true)
+            })
+            .map(|e| e.into_path())
+            .collect();
+
+        files.sort();
+        self.vault_files = files;
+
+        if self.vault_files.is_empty() {
+            self.list_state.select(None);
+        } else {
+            self.list_state.select(Some(0));
+        }
+    }
+
     fn update(&mut self, key: KeyCode) {
         if let Some(prompt) = &self.confirm {
             match key {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                     self.current_vault = prompt.pending_vault.clone();
+                    self.travdir_notes(self.current_dir.clone());
                     self.confirm = None;
                     self.state = AppState::Note;
                 }
@@ -146,6 +172,18 @@ impl App {
                 _ => {}
             }
             return;
+        }
+
+        match (&self.state, key, &self.focused_tab) {
+            (AppState::Note, KeyCode::Char('j'), FocusedTab::Explorer) => {
+                self.list_state.select_next();
+            }
+
+            (AppState::Note, KeyCode::Char('k'), FocusedTab::Explorer) => {
+                self.list_state.select_previous();
+            }
+
+            _ => {}
         }
 
         match (&self.state, key) {
@@ -169,11 +207,11 @@ impl App {
                 }
             }
 
-            (AppState::VaultSelect | AppState::Note, KeyCode::Char('j')) => {
+            (AppState::VaultSelect, KeyCode::Char('j')) => {
                 self.list_state.select_next();
             }
 
-            (AppState::VaultSelect | AppState::Note, KeyCode::Char('k')) => {
+            (AppState::VaultSelect, KeyCode::Char('k')) => {
                 self.list_state.select_previous();
             }
 
@@ -395,15 +433,6 @@ impl App {
     }
 
     fn note(&mut self, frame: &mut Frame) {
-        let get_explorer_color = |focus: &FocusedTab| match focus {
-            FocusedTab::Editor => Color::DarkGray,
-            FocusedTab::Explorer => Color::Blue,
-        };
-        let get_editor_color = |focus: &FocusedTab| match focus {
-            FocusedTab::Editor => Color::Blue,
-            FocusedTab::Explorer => Color::DarkGray,
-        };
-
         let outer = frame.area();
 
         let outer_block = Block::bordered()
@@ -418,42 +447,78 @@ impl App {
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
             .areas(inner);
 
-        let items: Vec<ListItem> = self
-            .vault_files
-            .iter()
-            .filter_map(|f| {
-                f.file_name().map(|name| {
-                    ListItem::new(name.to_string_lossy().to_string())
-                        .style(Style::default().fg(get_explorer_color(&self.focused_tab)))
-                })
-            })
-            .collect();
+        match self.focused_tab {
+            FocusedTab::Explorer => {
+                let items: Vec<ListItem> = self
+                    .vault_files
+                    .iter()
+                    .filter_map(|f| {
+                        f.file_name().map(|name| {
+                            ListItem::new(name.to_string_lossy().to_string())
+                                .style(Style::default().fg(Color::Reset))
+                        })
+                    })
+                    .collect();
 
-        let list = List::new(items)
-            .block(
-                Block::bordered()
-                    .title(" Explorer ")
-                    .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
-                    .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
-                    .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                    .title_alignment(Alignment::Center)
-                    .border_style(Style::default().fg(get_explorer_color(&self.focused_tab))),
-            )
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Gray)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("-> ");
+                let list = List::new(items)
+                    .block(
+                        Block::bordered()
+                            .title(" Explorer ")
+                            .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
+                            .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
+                            .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
+                            .title_alignment(Alignment::Center)
+                            .border_style(Style::default().fg(Color::Reset)),
+                    )
+                    .highlight_style(
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Gray)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                    .highlight_symbol("-> ");
 
-        frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
+                frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
 
-        let content_block = Block::bordered()
-            .title(" Note ")
-            .border_style(Style::default().fg(get_editor_color(&self.focused_tab)));
+                let content_block = Block::bordered()
+                    .title(" Note ")
+                    .border_style(Style::default().fg(Color::DarkGray));
 
-        frame.render_widget(content_block, content_area);
+                frame.render_widget(content_block, content_area);
+            }
+            FocusedTab::Editor => {
+                let items: Vec<ListItem> = self
+                    .vault_files
+                    .iter()
+                    .filter_map(|f| {
+                        f.file_name().map(|name| {
+                            ListItem::new(name.to_string_lossy().to_string())
+                                .style(Style::default().fg(Color::DarkGray))
+                        })
+                    })
+                    .collect();
+
+                let list = List::new(items)
+                    .block(
+                        Block::bordered()
+                            .title(" Explorer ")
+                            .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
+                            .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
+                            .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
+                            .title_alignment(Alignment::Center)
+                            .border_style(Style::default().fg(Color::DarkGray)),
+                    )
+                    .highlight_symbol("   ");
+
+                frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
+
+                let content_block = Block::bordered()
+                    .title(" Note ")
+                    .border_style(Style::default().fg(Color::Reset));
+
+                frame.render_widget(content_block, content_area);
+            }
+        }
     }
 }
 
