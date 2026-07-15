@@ -564,7 +564,7 @@ impl App {
 
                         let style = if item.is_dir {
                             Style::default()
-                                .fg(Color::Blue)
+                                .fg(Color::Yellow)
                                 .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().fg(Color::Reset)
