@@ -604,7 +604,7 @@ impl App {
                 frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
 
                 let content_block = Block::bordered()
-                    .title(" Note ")
+                    .title(" Editor ")
                     .border_style(Style::default().fg(Color::DarkGray));
 
                 frame.render_widget(content_block, content_area);
@@ -639,7 +639,6 @@ impl App {
                             .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
                             .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
                             .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                            .title_alignment(Alignment::Center)
                             .border_style(Style::default().fg(Color::DarkGray)),
                     )
                     .highlight_symbol("  ");
@@ -647,7 +646,7 @@ impl App {
                 frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
 
                 let content_block = Block::bordered()
-                    .title(" Note ")
+                    .title(" Editor ")
                     .border_style(Style::default().fg(Color::Reset));
 
                 frame.render_widget(content_block, content_area);
