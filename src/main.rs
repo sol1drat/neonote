@@ -1,18 +1,18 @@
-// NOTE: PRESSING ENTER WHILE FOCUSED ON EDITOR OPENS DIRECTORY
-
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
+// TODO: IMPLEMENT VIM-STYLE EDITOR
 
 use std::{fs, io, path::PathBuf};
 
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Clear, List, ListItem, ListState, Paragraph},
 };
+use tui_textarea::TextArea;
 use walkdir::WalkDir;
 
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
@@ -52,12 +52,56 @@ struct App {
     cursor_position: usize,
     confirm: Option<ConfirmPrompt>,
     note_files: Vec<NoteItem>,
-    editor_content: String,
+    editor: TextArea<'static>,
+    current_note: PathBuf,
 }
 
 impl App {
+    fn select_next(&mut self) {
+        let i = self.list_state.selected().unwrap_or(0);
+        self.list_state.select(Some(i.saturating_add(1)));
+    }
+
+    fn select_previous(&mut self) {
+        if let Some(i) = self.list_state.selected() {
+            self.list_state.select(Some(i.saturating_sub(1)));
+        }
+    }
+
+    fn style_editor(&mut self) {
+        self.editor
+            .set_cursor_line_style(Style::default().add_modifier(Modifier::UNDERLINED));
+        self.editor.set_placeholder_text("…");
+        self.editor
+            .set_placeholder_style(Style::default().fg(Color::DarkGray));
+    }
+
+    fn reset_editor(&mut self) {
+        self.editor = TextArea::default();
+        self.style_editor();
+    }
+
+    fn load_note_into_editor(&mut self, contents: String) {
+        let lines: Vec<String> = if contents.is_empty() {
+            vec![String::new()]
+        } else {
+            contents.lines().map(|s| s.to_string()).collect()
+        };
+        self.editor = TextArea::new(lines);
+        self.style_editor();
+    }
+
+    fn save_current_note(&self) -> io::Result<()> {
+        if self.current_note.as_os_str().is_empty() {
+            return Ok(());
+        }
+        let content = self.editor.lines().join("\n");
+        fs::write(&self.current_note, content)
+    }
+
     fn new() -> Self {
-        Self {
+        let editor = TextArea::default();
+        let mut app = Self {
             state: AppState::Menu,
             focused_tab: FocusedTab::Explorer,
             exit: false,
@@ -68,8 +112,11 @@ impl App {
             cursor_position: 0,
             confirm: None,
             note_files: Vec::new(),
-            editor_content: String::new(),
-        }
+            editor,
+            current_note: PathBuf::default(),
+        };
+        app.style_editor();
+        app
     }
 
     fn view(&mut self, frame: &mut Frame) {
@@ -114,10 +161,9 @@ impl App {
         frame.render_widget(Clear, popup);
 
         let text = format!("{}\n\n[Y] Yes    [N] No", prompt.message);
-
         let widget = Paragraph::new(text)
             .alignment(Alignment::Center)
-            .block(Block::default().title("Confirm").borders(Borders::ALL));
+            .block(Block::bordered().title("Confirm"));
 
         frame.render_widget(widget, popup);
     }
@@ -137,11 +183,9 @@ impl App {
             })
             .map(|e| e.into_path())
             .collect();
-
         files.sort();
 
         self.vault_files = files;
-
         if self.vault_files.is_empty() {
             self.list_state.select(None);
         } else {
@@ -151,6 +195,7 @@ impl App {
 
     fn load_note_items(&mut self) {
         let mut items = Vec::new();
+
         if let Ok(read_dir) = fs::read_dir(&self.current_vault) {
             for entry in read_dir.flatten() {
                 let path = entry.path();
@@ -181,7 +226,8 @@ impl App {
             )
         });
         self.note_files = items;
-        self.editor_content.clear();
+        self.reset_editor();
+        self.current_note = PathBuf::default();
 
         if self.note_files.is_empty() {
             self.list_state.select(None);
@@ -241,16 +287,15 @@ impl App {
                         .map_or(String::new(), |n| n.to_string_lossy().to_string()),
                 )
             });
-
             for (offset, item) in new_items.into_iter().enumerate() {
                 self.note_files.insert(index + 1 + offset, item);
             }
         }
     }
 
-    fn update(&mut self, key: KeyCode) {
+    fn update(&mut self, key: KeyEvent) {
         if let Some(prompt) = &self.confirm {
-            match key {
+            match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                     self.current_vault = prompt.pending_vault.clone();
                     self.load_note_items();
@@ -265,22 +310,54 @@ impl App {
             return;
         }
 
-        match (&self.state, key, &self.focused_tab) {
-            (AppState::Note, KeyCode::Char('j'), FocusedTab::Explorer) => {
-                self.list_state.select_next();
+        if matches!(self.state, AppState::Note) && matches!(self.focused_tab, FocusedTab::Editor) {
+            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
+                let _ = self.save_current_note();
+                return;
             }
-
-            (AppState::Note, KeyCode::Char('k'), FocusedTab::Explorer) => {
-                self.list_state.select_previous();
+            match key.code {
+                KeyCode::Esc => {
+                    self.focused_tab = FocusedTab::Explorer;
+                    return;
+                }
+                KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.exit = true;
+                    return;
+                }
+                _ => {}
             }
-
-            _ => {}
+            self.editor.input(key);
+            return;
         }
 
-        match (&self.state, key) {
+        if matches!(self.state, AppState::Note) && matches!(self.focused_tab, FocusedTab::Explorer)
+        {
+            match key.code {
+                KeyCode::Char('j') => self.select_next(),
+                KeyCode::Char('k') => self.select_previous(),
+                KeyCode::Tab => self.focused_tab = FocusedTab::Editor,
+                KeyCode::Char('q') => self.exit = true,
+                KeyCode::Enter => {
+                    if let Some(idx) = self.list_state.selected() {
+                        if let Some(item) = self.note_files.get(idx) {
+                            if item.is_dir {
+                                self.toggle_expand(idx);
+                            } else if let Ok(contents) = fs::read_to_string(&item.path) {
+                                self.current_note = item.path.clone();
+                                self.load_note_into_editor(contents);
+                                self.focused_tab = FocusedTab::Editor;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        match (&self.state, key.code) {
             (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
             (AppState::VaultSelect, KeyCode::Char('q')) => self.exit = true,
-            (AppState::Note, KeyCode::Char('q')) => self.exit = true,
 
             (AppState::Menu, KeyCode::Char('v')) => {
                 if let Ok(path) = std::env::current_dir() {
@@ -297,18 +374,11 @@ impl App {
                     self.list_state.select(Some(0));
                 }
             }
-
-            (AppState::VaultSelect, KeyCode::Char('j')) => {
-                self.list_state.select_next();
-            }
-
-            (AppState::VaultSelect, KeyCode::Char('k')) => {
-                self.list_state.select_previous();
-            }
-
+            (AppState::VaultSelect, KeyCode::Char('j')) => self.select_next(),
+            (AppState::VaultSelect, KeyCode::Char('k')) => self.select_previous(),
             (AppState::VaultSelect, KeyCode::Char('l')) => {
-                if let Some(selected_index) = self.list_state.selected() {
-                    if let Some(dir_path) = self.vault_files.get(selected_index) {
+                if let Some(idx) = self.list_state.selected() {
+                    if let Some(dir_path) = self.vault_files.get(idx) {
                         if let Ok(full_path) = fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.travdir(self.current_dir.clone());
@@ -317,34 +387,29 @@ impl App {
                     }
                 }
             }
-
             (AppState::VaultSelect, KeyCode::Enter) => {
-                if let Some(selected_index) = self.list_state.selected() {
-                    if let Some(dir_path) = self.vault_files.get(selected_index) {
+                if let Some(idx) = self.list_state.selected() {
+                    if let Some(dir_path) = self.vault_files.get(idx) {
                         if let Ok(full_path) = fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.confirm = Some(ConfirmPrompt {
                                 message: format!("Open {} as a vault?", full_path.display()),
                                 pending_vault: full_path,
-                            })
+                            });
                         }
                     }
                 }
             }
-
-            (AppState::VaultSelect, KeyCode::Char('c')) => {
-                self.state = AppState::DirCreate;
-            }
+            (AppState::VaultSelect, KeyCode::Char('c')) => self.state = AppState::DirCreate,
 
             (AppState::DirCreate, KeyCode::Esc) => {
                 self.state = AppState::VaultSelect;
+                self.input.clear();
+                self.cursor_position = 0;
             }
 
-<<<<<<< HEAD
-=======
             // TODO: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY AND USER IS NOT WARNED IN CASE
             // OF BAD INPUT
->>>>>>> 6d41910 (Editor implementation and fixes)
             (AppState::DirCreate, KeyCode::Enter) => {
                 // FIX: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
                 let new_dir = format!(
@@ -353,61 +418,32 @@ impl App {
                     self.input.clone()
                 );
                 let _ = fs::create_dir(new_dir);
-
                 self.travdir(self.current_dir.clone());
                 self.list_state.select(Some(0));
                 self.state = AppState::VaultSelect;
-
                 self.input.clear();
                 self.cursor_position = 0;
             }
-
             (AppState::DirCreate, KeyCode::Char(c)) => {
                 self.input.insert(self.cursor_position, c);
                 self.cursor_position += 1;
             }
-
             (AppState::DirCreate, KeyCode::Backspace) => {
                 if self.cursor_position > 0 {
                     self.input.remove(self.cursor_position - 1);
                     self.cursor_position -= 1;
                 }
             }
-
             (AppState::DirCreate, KeyCode::Left) => {
                 if self.cursor_position > 0 {
                     self.cursor_position -= 1;
                 }
             }
-
             (AppState::DirCreate, KeyCode::Right) => {
                 if self.cursor_position < self.input.len() {
                     self.cursor_position += 1;
                 }
             }
-
-            (AppState::Note, KeyCode::Tab) => {
-                self.focused_tab = match self.focused_tab {
-                    FocusedTab::Explorer => FocusedTab::Editor,
-                    FocusedTab::Editor => FocusedTab::Explorer,
-                };
-            }
-
-            (AppState::Note, KeyCode::Enter) => {
-                if let Some(selected_index) = self.list_state.selected() {
-                    if let Some(item) = self.note_files.get(selected_index) {
-                        if item.is_dir {
-                            self.toggle_expand(selected_index);
-                        } else {
-                            if let Ok(contents) = fs::read_to_string(&item.path) {
-                                self.editor_content = contents;
-                                self.focused_tab = FocusedTab::Editor;
-                            }
-                        }
-                    }
-                }
-            }
-
             _ => {}
         }
     }
@@ -416,9 +452,9 @@ impl App {
         let area = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Fill(1),
+                Constraint::Min(1),
                 Constraint::Length(9),
-                Constraint::Fill(1),
+                Constraint::Min(1),
             ])
             .split(frame.area())[1];
 
@@ -434,20 +470,15 @@ impl App {
             ])
             .split(area);
 
-        // TODO: MOVE CONSTANTS TO DIFFERENT FILES
-
         let title = Paragraph::new("NeoNote".bold().blue()).alignment(Alignment::Center);
-
         let description = Paragraph::new(
             "NNote is a keyboard-first note taking app in your terminal\n\
              Local Markdown notes, simple, quick and lightweight\n\n\
              Start by opening a vault",
         )
         .alignment(Alignment::Center);
-
         let vault_option = Paragraph::new(Line::from(vec!["v".bold(), " to open vault".into()]))
             .alignment(Alignment::Center);
-
         let quit_option = Paragraph::new(Line::from(vec!["q".bold(), " to quit".into()]))
             .alignment(Alignment::Center);
 
@@ -462,7 +493,6 @@ impl App {
             horizontal: 30,
             vertical: 6,
         });
-
         let items: Vec<ListItem> = self
             .vault_files
             .iter()
@@ -476,7 +506,6 @@ impl App {
                 })
             })
             .collect();
-
         let list = List::new(items)
             .block(
                 Block::bordered()
@@ -500,24 +529,20 @@ impl App {
                     .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol(" -> ");
-
         frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
     }
 
     fn dir_create(&mut self, frame: &mut Frame) {
         let height = 3u16;
         let width = 45u16;
-
         let x = frame.area().x + (frame.area().width.saturating_sub(width)) / 2;
         let y = frame.area().y + (frame.area().height.saturating_sub(height)) / 2;
-
         let area = Rect::new(
             x,
             y,
             width.min(frame.area().width),
             height.min(frame.area().height),
         );
-
         frame.render_widget(Clear, area);
 
         let block = Block::bordered()
@@ -525,152 +550,134 @@ impl App {
             .title_bottom(Line::from(vec![" Esc".bold(), " to close ".into()]))
             .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
             .title_alignment(Alignment::Center);
-
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
         let visible_width = inner.width as usize;
         let mut cursor_offset = self.cursor_position.min(self.input.len());
-
         let display_start = if cursor_offset > visible_width {
             cursor_offset - visible_width
         } else {
             0
         };
-
         let chars: Vec<char> = self.input.chars().collect();
         let display_end = (display_start + visible_width).min(chars.len());
-
         let visible_text: String = chars[display_start..display_end].iter().collect();
-
         cursor_offset -= display_start;
         cursor_offset = cursor_offset.min(visible_width.saturating_sub(1));
 
         let input = Paragraph::new(visible_text).style(Style::default().fg(Color::Yellow));
         frame.render_widget(input, inner);
-
         frame.set_cursor_position((inner.x + cursor_offset as u16, inner.y));
     }
 
     fn note(&mut self, frame: &mut Frame) {
         let outer = frame.area();
-
         let outer_block = Block::bordered()
             .title(" NeoNote ")
             .title_alignment(Alignment::Center);
-
         let inner = outer_block.inner(outer);
         frame.render_widget(outer_block, outer);
 
-        let [explorer_area, content_area] = Layout::default()
+        let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-            .areas(inner);
+            .split(inner);
+        let explorer_area = layout[0];
+        let content_area = layout[1];
 
-        match self.focused_tab {
-            FocusedTab::Explorer => {
-                let items: Vec<ListItem> = self
-                    .note_files
-                    .iter()
-                    .map(|item| {
-                        let indent = "  ".repeat(item.depth);
-                        let name = item
-                            .path
-                            .file_name()
-                            .map_or(String::new(), |n| n.to_string_lossy().to_string());
-
-                        let symbol = if item.is_dir {
-                            if item.expanded { "▾ " } else { "▸ " }
-                        } else {
-                            "  "
-                        };
-
-                        let text = format!("{}{}{}", indent, symbol, name);
-
-                        let style = if item.is_dir {
+        let items: Vec<ListItem> = self
+            .note_files
+            .iter()
+            .map(|item| {
+                let indent = "  ".repeat(item.depth);
+                let name = item
+                    .path
+                    .file_name()
+                    .map_or(String::new(), |n| n.to_string_lossy().to_string());
+                let symbol = if item.is_dir {
+                    if item.expanded { "▾ " } else { "▸ " }
+                } else {
+                    "  "
+                };
+                let text = format!("{}{}{}", indent, symbol, name);
+                let explorer_items_style = match self.focused_tab {
+                    FocusedTab::Explorer => {
+                        if item.is_dir {
                             Style::default()
                                 .fg(Color::Yellow)
                                 .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().fg(Color::Reset)
-                        };
+                        }
+                    }
+                    FocusedTab::Editor => Style::default().fg(Color::Gray),
+                };
+                ListItem::new(text).style(explorer_items_style)
+            })
+            .collect();
 
-                        ListItem::new(text).style(style)
-                    })
-                    .collect();
+        let explorer_border_style = match self.focused_tab {
+            FocusedTab::Explorer => Style::default().fg(Color::Reset),
+            FocusedTab::Editor => Style::default().fg(Color::Gray),
+        };
 
-                let list = List::new(items)
-                    .block(
-                        Block::bordered()
-                            .title(" Explorer ")
-                            .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
-                            .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
-                            .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                            .border_style(Style::default().fg(Color::Reset)),
-                    )
-                    .highlight_style(
-                        Style::default()
-                            .fg(Color::Black)
-                            .bg(Color::Gray)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                    .highlight_symbol("  ");
+        let explorer_highlight_style = match self.focused_tab {
+            FocusedTab::Explorer => Style::default()
+                .fg(Color::Black)
+                .bg(Color::Gray)
+                .add_modifier(Modifier::BOLD),
+            FocusedTab::Editor => Style::default(),
+        };
 
-                frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
-
-                let content_block = Block::bordered()
-                    .title(" Editor ")
-                    .border_style(Style::default().fg(Color::DarkGray));
-
-                frame.render_widget(content_block, content_area);
-            }
-            FocusedTab::Editor => {
-                let items: Vec<ListItem> = self
-                    .note_files
-                    .iter()
-                    .map(|item| {
-                        let indent = "  ".repeat(item.depth);
-                        let name = item
-                            .path
+        let explorer_list = List::new(items)
+            .block(
+                Block::bordered()
+                    .title(" Explorer ")
+                    .title(format!(
+                        " {} ",
+                        self.current_vault
                             .file_name()
-                            .map_or(String::new(), |n| n.to_string_lossy().to_string());
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                    ))
+                    .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
+                    .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
+                    .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
+                    .border_style(explorer_border_style),
+            )
+            .highlight_style(explorer_highlight_style)
+            .highlight_symbol(" ");
+        frame.render_stateful_widget(explorer_list, explorer_area, &mut self.list_state);
 
-                        let symbol = if item.is_dir {
-                            if item.expanded { "▾ " } else { "▸ " }
-                        } else {
-                            "  "
-                        };
+        let note_file_name = self
+            .current_note
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
 
-                        let text = format!("{}{}{}", indent, symbol, name);
+        let editor_title = if note_file_name.is_empty() {
+            " Editor ".to_string()
+        } else {
+            format!(" {} ", note_file_name)
+        };
 
-                        ListItem::new(text).style(Style::default().fg(Color::DarkGray))
-                    })
-                    .collect();
+        let editor_border_style = match self.focused_tab {
+            FocusedTab::Editor => Style::default().fg(Color::Reset),
+            FocusedTab::Explorer => Style::default().fg(Color::Gray),
+        };
 
-                let list = List::new(items)
-                    .block(
-                        Block::bordered()
-                            .title(" Explorer ")
-                            .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
-                            .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
-                            .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                            .border_style(Style::default().fg(Color::DarkGray)),
-                    )
-                    .highlight_symbol("  ");
+        self.editor.set_block(
+            Block::bordered()
+                .title(editor_title)
+                .title_bottom(Line::from(vec![" Esc".bold(), " to exit ".into()]))
+                .title_bottom(Line::from(vec![" Ctrl+S".bold(), " to save ".into()]))
+                .border_style(editor_border_style),
+        );
+        self.editor.set_style(Style::default().fg(Color::Reset));
 
-                frame.render_stateful_widget(list, explorer_area, &mut self.list_state);
-
-                let content_block = Block::bordered()
-                    .title(" Editor ")
-                    .border_style(Style::default().fg(Color::Reset));
-
-                let text_content = Paragraph::new(self.editor_content.clone())
-                    .block(content_block)
-                    .wrap(Wrap { trim: false });
-
-                frame.render_widget(text_content, content_area);
-            }
-        }
+        frame.render_widget(&self.editor, content_area);
     }
 }
 
@@ -681,7 +688,9 @@ fn main() -> io::Result<()> {
     while !app.exit {
         terminal.draw(|frame| app.view(frame))?;
         if let Event::Key(key) = event::read()? {
-            app.update(key.code);
+            if key.kind == KeyEventKind::Press {
+                app.update(key);
+            }
         }
     }
 
