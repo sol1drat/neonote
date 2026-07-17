@@ -1,10 +1,16 @@
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
 // TODO: ADD DIRECTORY AND FILE CREATION
+// TODO: MAKE A MORE MODULAR CONFIRM PROMPT
 
 use std::{fs, io, path::PathBuf};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::{
+    self,
+    cursor::SetCursorStyle,
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    execute,
+};
 use edtui::{EditorEventHandler, EditorMode, EditorState, EditorTheme, EditorView, Lines};
 use ratatui::{
     Frame,
@@ -57,6 +63,7 @@ struct App {
     current_note: PathBuf,
     note_changed: bool,
     saved_content: String,
+    last_cursor_mode: Option<edtui::EditorMode>,
 }
 
 impl App {
@@ -105,6 +112,7 @@ impl App {
             editor_handler: EditorEventHandler::default(),
             current_note: PathBuf::default(),
             saved_content: String::new(),
+            last_cursor_mode: None,
         }
     }
 
@@ -122,6 +130,8 @@ impl App {
         if let Some(prompt) = &self.confirm {
             self.draw_confirm(frame, frame.area(), prompt);
         }
+
+        self.apply_cursor_shape();
     }
 
     fn centered_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -179,6 +189,28 @@ impl App {
             self.list_state.select(None);
         } else {
             self.list_state.select(Some(0));
+        }
+    }
+
+    fn apply_cursor_shape(&mut self) {
+        let want = if matches!(self.state, AppState::Note)
+            && matches!(self.focused_tab, FocusedTab::Editor)
+        {
+            Some(self.editor.mode)
+        } else {
+            None
+        };
+
+        if want != self.last_cursor_mode {
+            let style = match want {
+                Some(edtui::EditorMode::Normal) => SetCursorStyle::SteadyBlock,
+                Some(edtui::EditorMode::Insert) => SetCursorStyle::SteadyBar,
+                Some(edtui::EditorMode::Visual) => SetCursorStyle::SteadyUnderScore,
+                Some(edtui::EditorMode::Search) => SetCursorStyle::SteadyUnderScore,
+                None => SetCursorStyle::DefaultUserShape,
+            };
+            let _ = execute!(io::stdout(), style);
+            self.last_cursor_mode = want;
         }
     }
 
@@ -306,10 +338,12 @@ impl App {
                 let _ = self.save_current_note();
                 return;
             }
+
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
                 self.exit = true;
                 return;
             }
+
             if key.code == KeyCode::Esc && self.editor.mode == EditorMode::Normal {
                 self.focused_tab = FocusedTab::Explorer;
                 return;
@@ -664,9 +698,15 @@ impl App {
             .title_bottom(Line::from(vec![" Ctrl+S".bold(), " to save ".into()]))
             .border_style(editor_border_style);
 
-        let theme = EditorTheme::default().block(editor_block);
+        let theme = EditorTheme::default().block(editor_block).hide_cursor();
 
         frame.render_widget(EditorView::new(&mut self.editor).theme(theme), content_area);
+
+        if matches!(self.focused_tab, FocusedTab::Editor) {
+            if let Some(pos) = self.editor.cursor_screen_position() {
+                frame.set_cursor_position(pos);
+            }
+        }
     }
 }
 
@@ -683,6 +723,7 @@ fn main() -> io::Result<()> {
         }
     }
 
+    crossterm::execute!(io::stdout(), SetCursorStyle::DefaultUserShape)?;
     ratatui::restore();
     Ok(())
 }
