@@ -71,10 +71,6 @@ impl App {
         }
     }
 
-    fn reset_editor(&mut self) {
-        self.editor = EditorState::default();
-    }
-
     fn load_note_into_editor(&mut self, contents: String) {
         self.note_changed = false;
         self.saved_content = contents.clone();
@@ -220,7 +216,7 @@ impl App {
         });
 
         self.note_files = items;
-        self.reset_editor();
+        self.editor = EditorState::default();
         self.current_note = PathBuf::default();
         self.saved_content.clear();
 
