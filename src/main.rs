@@ -6,6 +6,7 @@
 use std::{fs, io, path::PathBuf};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use edtui::{EditorEventHandler, EditorState, EditorTheme, EditorView, Lines};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -13,7 +14,6 @@ use ratatui::{
     text::Line,
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph},
 };
-use tui_textarea::TextArea;
 use walkdir::WalkDir;
 
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
@@ -53,7 +53,8 @@ struct App {
     cursor_position: usize,
     confirm: Option<ConfirmPrompt>,
     note_files: Vec<NoteItem>,
-    editor: TextArea<'static>,
+    editor: EditorState,
+    editor_handler: EditorEventHandler,
     current_note: PathBuf,
     note_changed: bool,
     saved_content: String,
@@ -71,28 +72,14 @@ impl App {
         }
     }
 
-    fn style_editor(&mut self) {
-        self.editor.set_cursor_line_style(Style::default());
-        self.editor.set_placeholder_text("…");
-        self.editor
-            .set_placeholder_style(Style::default().fg(Color::DarkGray));
-    }
-
     fn reset_editor(&mut self) {
-        self.editor = TextArea::default();
-        self.style_editor();
+        self.editor = EditorState::default();
     }
 
     fn load_note_into_editor(&mut self, contents: String) {
         self.note_changed = false;
         self.saved_content = contents.clone();
-        let lines: Vec<String> = if contents.is_empty() {
-            vec![String::new()]
-        } else {
-            contents.lines().map(|s| s.to_string()).collect()
-        };
-        self.editor = TextArea::new(lines);
-        self.style_editor();
+        self.editor = EditorState::new(Lines::from(contents));
     }
 
     fn save_current_note(&mut self) -> io::Result<()> {
@@ -100,15 +87,14 @@ impl App {
         if self.current_note.as_os_str().is_empty() {
             return Ok(());
         }
-        let content = self.editor.lines().join("\n");
+        let content = self.editor.lines.to_string();
         fs::write(&self.current_note, &content)?;
         self.saved_content = content;
         Ok(())
     }
 
     fn new() -> Self {
-        let editor = TextArea::default();
-        let mut app = Self {
+        Self {
             state: AppState::Menu,
             focused_tab: FocusedTab::Explorer,
             exit: false,
@@ -120,12 +106,11 @@ impl App {
             confirm: None,
             note_files: Vec::new(),
             note_changed: false,
-            editor,
+            editor: EditorState::default(),
+            editor_handler: EditorEventHandler::default(),
             current_note: PathBuf::default(),
             saved_content: String::new(),
-        };
-        app.style_editor();
-        app
+        }
     }
 
     fn view(&mut self, frame: &mut Frame) {
@@ -326,19 +311,18 @@ impl App {
                 let _ = self.save_current_note();
                 return;
             }
-            match key.code {
-                KeyCode::Esc => {
-                    self.focused_tab = FocusedTab::Explorer;
-                    return;
-                }
-                KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.exit = true;
-                    return;
-                }
-                _ => {}
+            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
+                self.exit = true;
+                return;
             }
-            self.editor.input(key);
-            let editor_content = self.editor.lines().join("\n");
+            if key.code == KeyCode::Esc {
+                self.focused_tab = FocusedTab::Explorer;
+                return;
+            }
+
+            self.editor_handler.on_key_event(key, &mut self.editor);
+
+            let editor_content = self.editor.lines.to_string();
             self.note_changed =
                 !self.current_note.as_os_str().is_empty() && editor_content != self.saved_content;
             return;
@@ -656,7 +640,13 @@ impl App {
             )
             .highlight_style(explorer_highlight_style)
             .highlight_symbol(" ");
+
         frame.render_stateful_widget(explorer_list, explorer_area, &mut self.list_state);
+
+        let editor_border_style = match self.focused_tab {
+            FocusedTab::Editor => Style::default().fg(Color::Reset),
+            FocusedTab::Explorer => Style::default().fg(Color::Gray),
+        };
 
         let note_file_name = self
             .current_note
@@ -673,21 +663,15 @@ impl App {
             format!(" {} ", note_file_name)
         };
 
-        let editor_border_style = match self.focused_tab {
-            FocusedTab::Editor => Style::default().fg(Color::Reset),
-            FocusedTab::Explorer => Style::default().fg(Color::Gray),
-        };
+        let editor_block = Block::bordered()
+            .title(editor_title)
+            .title_bottom(Line::from(vec![" Esc".bold(), " to exit ".into()]))
+            .title_bottom(Line::from(vec![" Ctrl+S".bold(), " to save ".into()]))
+            .border_style(editor_border_style);
 
-        self.editor.set_block(
-            Block::bordered()
-                .title(editor_title)
-                .title_bottom(Line::from(vec![" Esc".bold(), " to exit ".into()]))
-                .title_bottom(Line::from(vec![" Ctrl+S".bold(), " to save ".into()]))
-                .border_style(editor_border_style),
-        );
-        self.editor.set_style(editor_border_style);
+        let theme = EditorTheme::default().block(editor_block);
 
-        frame.render_widget(&self.editor, content_area);
+        frame.render_widget(EditorView::new(&mut self.editor).theme(theme), content_area);
     }
 }
 
