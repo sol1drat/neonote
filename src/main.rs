@@ -1,3 +1,5 @@
+// NOTE: WAS IMPLEMENTING CONFIRMATION ON QUIT, BUT THE CURRENT APPROACH IS BAD
+
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
 // TODO: ADD DIRECTORY AND FILE CREATION
@@ -34,9 +36,15 @@ enum FocusedTab {
     Editor,
 }
 
+enum ConfirmSubject {
+    Vault,
+    Exit,
+}
+
 struct ConfirmPrompt {
     message: String,
     pending_vault: PathBuf,
+    subject: ConfirmSubject,
 }
 
 #[derive(Clone)]
@@ -319,12 +327,18 @@ impl App {
     fn update(&mut self, key: KeyEvent) {
         if let Some(prompt) = &self.confirm {
             match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-                    self.current_vault = prompt.pending_vault.clone();
-                    self.load_note_items();
-                    self.confirm = None;
-                    self.state = AppState::Note;
-                }
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => match prompt.subject {
+                    ConfirmSubject::Vault => {
+                        self.current_vault = prompt.pending_vault.clone();
+                        self.load_note_items();
+                        self.confirm = None;
+                        self.state = AppState::Note;
+                    }
+                    ConfirmSubject::Exit => {
+                        self.exit = true;
+                        self.confirm = None;
+                    }
+                },
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                     self.confirm = None;
                 }
@@ -363,7 +377,14 @@ impl App {
                 KeyCode::Char('j') => self.select_next(),
                 KeyCode::Char('k') => self.select_previous(),
                 KeyCode::Tab => self.focused_tab = FocusedTab::Editor,
-                KeyCode::Char('q') => self.exit = true,
+                KeyCode::Char('q') => {
+                    self.confirm = Some(ConfirmPrompt {
+                        message: "Are you sure you want to quit?".into(),
+                        pending_vault: PathBuf::default(),
+                        subject: ConfirmSubject::Vault,
+                    });
+                    self.exit = true;
+                }
                 KeyCode::Enter => {
                     if let Some(idx) = self.list_state.selected() {
                         if let Some(item) = self.note_files.get(idx) {
@@ -422,6 +443,7 @@ impl App {
                             self.confirm = Some(ConfirmPrompt {
                                 message: format!("Open {} as a vault?", full_path.display()),
                                 pending_vault: full_path,
+                                subject: ConfirmSubject::Vault,
                             });
                         }
                     }
