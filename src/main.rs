@@ -71,8 +71,7 @@ impl App {
     }
 
     fn style_editor(&mut self) {
-        self.editor
-            .set_cursor_line_style(Style::default().add_modifier(Modifier::UNDERLINED));
+        self.editor.set_cursor_line_style(Style::default());
         self.editor.set_placeholder_text("…");
         self.editor
             .set_placeholder_style(Style::default().fg(Color::DarkGray));
@@ -84,6 +83,7 @@ impl App {
     }
 
     fn load_note_into_editor(&mut self, contents: String) {
+        self.note_changed = false;
         self.saved_content = contents.clone();
         let lines: Vec<String> = if contents.is_empty() {
             vec![String::new()]
@@ -95,6 +95,7 @@ impl App {
     }
 
     fn save_current_note(&mut self) -> io::Result<()> {
+        self.note_changed = false;
         if self.current_note.as_os_str().is_empty() {
             return Ok(());
         }
@@ -232,11 +233,11 @@ impl App {
                     .map_or(String::new(), |n| n.to_string_lossy().to_string()),
             )
         });
+
         self.note_files = items;
         self.reset_editor();
         self.current_note = PathBuf::default();
         self.saved_content.clear();
-        self.note_changed = false;
 
         if self.note_files.is_empty() {
             self.list_state.select(None);
@@ -683,7 +684,7 @@ impl App {
                 .title_bottom(Line::from(vec![" Ctrl+S".bold(), " to save ".into()]))
                 .border_style(editor_border_style),
         );
-        self.editor.set_style(Style::default().fg(Color::Reset));
+        self.editor.set_style(editor_border_style);
 
         frame.render_widget(&self.editor, content_area);
     }
