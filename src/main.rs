@@ -54,6 +54,8 @@ struct App {
     note_files: Vec<NoteItem>,
     editor: TextArea<'static>,
     current_note: PathBuf,
+    note_changed: bool,
+    saved_content: String,
 }
 
 impl App {
@@ -82,6 +84,7 @@ impl App {
     }
 
     fn load_note_into_editor(&mut self, contents: String) {
+        self.saved_content = contents.clone();
         let lines: Vec<String> = if contents.is_empty() {
             vec![String::new()]
         } else {
@@ -91,12 +94,14 @@ impl App {
         self.style_editor();
     }
 
-    fn save_current_note(&self) -> io::Result<()> {
+    fn save_current_note(&mut self) -> io::Result<()> {
         if self.current_note.as_os_str().is_empty() {
             return Ok(());
         }
         let content = self.editor.lines().join("\n");
-        fs::write(&self.current_note, content)
+        fs::write(&self.current_note, &content)?;
+        self.saved_content = content;
+        Ok(())
     }
 
     fn new() -> Self {
@@ -112,8 +117,10 @@ impl App {
             cursor_position: 0,
             confirm: None,
             note_files: Vec::new(),
+            note_changed: false,
             editor,
             current_note: PathBuf::default(),
+            saved_content: String::new(),
         };
         app.style_editor();
         app
@@ -228,6 +235,8 @@ impl App {
         self.note_files = items;
         self.reset_editor();
         self.current_note = PathBuf::default();
+        self.saved_content.clear();
+        self.note_changed = false;
 
         if self.note_files.is_empty() {
             self.list_state.select(None);
@@ -327,6 +336,9 @@ impl App {
                 _ => {}
             }
             self.editor.input(key);
+            let editor_content = self.editor.lines().join("\n");
+            self.note_changed =
+                !self.current_note.as_os_str().is_empty() && editor_content != self.saved_content;
             return;
         }
 
@@ -511,14 +523,8 @@ impl App {
                 Block::bordered()
                     .title(format!(" Path: {} ", self.current_dir.display()))
                     .title_bottom(Line::from(vec![" h/j/k/l".bold(), " to move ".into()]))
-                    .title_bottom(Line::from(vec![
-                        " c".bold(),
-                        " to create new vault ".into(),
-                    ]))
-                    .title_bottom(Line::from(vec![
-                        " Enter".bold(),
-                        " to select vault ".into(),
-                    ]))
+                    .title_bottom(Line::from(vec![" c".bold(), " to create vault ".into()]))
+                    .title_bottom(Line::from(vec![" Enter".bold(), " to open vault ".into()]))
                     .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
                     .title_alignment(Alignment::Center),
             )
@@ -659,6 +665,8 @@ impl App {
 
         let editor_title = if note_file_name.is_empty() {
             " Editor ".to_string()
+        } else if self.note_changed {
+            format!(" {}* ", note_file_name)
         } else {
             format!(" {} ", note_file_name)
         };
