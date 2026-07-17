@@ -5,7 +5,7 @@
 use std::{fs, io, path::PathBuf};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use edtui::{EditorEventHandler, EditorState, EditorTheme, EditorView, Lines};
+use edtui::{EditorEventHandler, EditorMode, EditorState, EditorTheme, EditorView, Lines};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -310,7 +310,7 @@ impl App {
                 self.exit = true;
                 return;
             }
-            if key.code == KeyCode::Esc {
+            if key.code == KeyCode::Esc && self.editor.mode == EditorMode::Normal {
                 self.focused_tab = FocusedTab::Explorer;
                 return;
             }
