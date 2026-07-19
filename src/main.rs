@@ -943,7 +943,7 @@ fn main() -> io::Result<()> {
                 return Ok(());
             }
             "--version" | "-v" => {
-                println!("NeoNote v0.2.1");
+                println!("NeoNote v0.2.2");
                 return Ok(());
             }
             other if other.starts_with('-') => {
