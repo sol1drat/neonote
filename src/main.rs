@@ -737,7 +737,7 @@ fn main() -> io::Result<()> {
                      Usage: {} [OPTIONS]\n\n\
                      Options:\n\
                      -h, --help       Print this message\n\
-                     -v, --version    Print the current version",
+                     -v, --version    Print version information",
                     args[0]
                 );
                 return Ok(());
