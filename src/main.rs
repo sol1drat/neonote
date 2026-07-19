@@ -174,7 +174,7 @@ impl App {
         let text = format!("{}\n\n[Y] Yes    [N] No", prompt.message);
         let widget = Paragraph::new(text)
             .alignment(Alignment::Center)
-            .block(Block::bordered().title("Confirm"));
+            .block(Block::bordered().title(" Confirm "));
 
         frame.render_widget(widget, popup);
     }
