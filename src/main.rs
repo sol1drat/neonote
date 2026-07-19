@@ -1,5 +1,3 @@
-// NOTE: WAS IMPLEMENTING CONFIRMATION ON QUIT, BUT THE CURRENT APPROACH IS BAD
-
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
 // TODO: ADD DIRECTORY AND FILE CREATION
@@ -43,7 +41,6 @@ enum ConfirmSubject {
 
 struct ConfirmPrompt {
     message: String,
-    pending_vault: PathBuf,
     subject: ConfirmSubject,
 }
 
@@ -84,6 +81,13 @@ impl App {
         if let Some(i) = self.list_state.selected() {
             self.list_state.select(Some(i.saturating_sub(1)));
         }
+    }
+
+    fn confirm_exit(&mut self) {
+        self.confirm = Some(ConfirmPrompt {
+            message: "Are you sure you want to quit?".into(),
+            subject: ConfirmSubject::Exit,
+        });
     }
 
     fn load_note_into_editor(&mut self, contents: String) {
@@ -329,15 +333,12 @@ impl App {
             match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => match prompt.subject {
                     ConfirmSubject::Vault => {
-                        self.current_vault = prompt.pending_vault.clone();
+                        self.current_vault = self.current_dir.clone();
                         self.load_note_items();
                         self.confirm = None;
                         self.state = AppState::Note;
                     }
-                    ConfirmSubject::Exit => {
-                        self.exit = true;
-                        self.confirm = None;
-                    }
+                    ConfirmSubject::Exit => self.exit = true,
                 },
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                     self.confirm = None;
@@ -354,7 +355,7 @@ impl App {
             }
 
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
-                self.exit = true;
+                self.confirm_exit();
                 return;
             }
 
@@ -377,14 +378,7 @@ impl App {
                 KeyCode::Char('j') => self.select_next(),
                 KeyCode::Char('k') => self.select_previous(),
                 KeyCode::Tab => self.focused_tab = FocusedTab::Editor,
-                KeyCode::Char('q') => {
-                    self.confirm = Some(ConfirmPrompt {
-                        message: "Are you sure you want to quit?".into(),
-                        pending_vault: PathBuf::default(),
-                        subject: ConfirmSubject::Vault,
-                    });
-                    self.exit = true;
-                }
+                KeyCode::Char('q') => self.confirm_exit(),
                 KeyCode::Enter => {
                     if let Some(idx) = self.list_state.selected() {
                         if let Some(item) = self.note_files.get(idx) {
@@ -405,7 +399,7 @@ impl App {
 
         match (&self.state, key.code) {
             (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
-            (AppState::VaultSelect, KeyCode::Char('q')) => self.exit = true,
+            (AppState::VaultSelect, KeyCode::Char('q')) => self.confirm_exit(),
 
             (AppState::Menu, KeyCode::Char('v')) => {
                 if let Ok(path) = std::env::current_dir() {
@@ -442,7 +436,6 @@ impl App {
                             self.current_dir = full_path.clone();
                             self.confirm = Some(ConfirmPrompt {
                                 message: format!("Open {} as a vault?", full_path.display()),
-                                pending_vault: full_path,
                                 subject: ConfirmSubject::Vault,
                             });
                         }
@@ -717,7 +710,8 @@ impl App {
         let editor_block = Block::bordered()
             .title(editor_title)
             .title_bottom(Line::from(vec![" Esc".bold(), " to exit ".into()]))
-            .title_bottom(Line::from(vec![" Ctrl+S".bold(), " to save ".into()]))
+            .title_bottom(Line::from(vec![" Ctrl+s".bold(), " to save ".into()]))
+            .title_bottom(Line::from(vec![" Ctrl+q".bold(), " to quit ".into()]))
             .border_style(editor_border_style);
 
         let theme = EditorTheme::default().block(editor_block).hide_cursor();
