@@ -743,7 +743,7 @@ fn main() -> io::Result<()> {
                 return Ok(());
             }
             "--version" | "-v" => {
-                println!("NeoNote v0.1.0");
+                println!("NeoNote v0.2.0");
                 return Ok(());
             }
             _ => {
