@@ -1,6 +1,7 @@
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
 // TODO: ADD DIRECTORY AND FILE CREATION
+// TODO: THROW ERROR IF VAULT DIRECTORY DOESN'T EXIST
 
 use std::{fs, io, path::PathBuf};
 
@@ -36,6 +37,7 @@ enum FocusedTab {
 enum ConfirmSubject {
     Vault,
     Exit,
+    StartVault,
 }
 
 struct ConfirmPrompt {
@@ -57,6 +59,7 @@ struct App {
     exit: bool,
     vault_files: Vec<PathBuf>,
     list_state: ListState,
+    current_vault: PathBuf,
     current_dir: PathBuf,
     input: String,
     cursor_position: usize,
@@ -96,38 +99,56 @@ impl App {
     }
 
     fn save_current_note(&mut self) -> io::Result<()> {
-        self.note_changed = false;
         if self.current_note.as_os_str().is_empty() {
             return Ok(());
         }
         let content = self.editor.lines.to_string();
         fs::write(&self.current_note, &content)?;
+        self.note_changed = false;
         self.saved_content = content;
         Ok(())
     }
 
-    fn new() -> Self {
+    fn new(vault: PathBuf) -> Self {
+        let current_vault = if vault.as_os_str().is_empty() {
+            vault.clone()
+        } else {
+            fs::canonicalize(&vault).unwrap_or(vault.clone())
+        };
+
+        let confirm = if !vault.as_os_str().is_empty() {
+            Some(ConfirmPrompt {
+                message: format!("Open {} as a vault?", vault.to_string_lossy()),
+                subject: ConfirmSubject::StartVault,
+            })
+        } else {
+            None
+        };
+
         Self {
             state: AppState::Menu,
             focused_tab: FocusedTab::Explorer,
             exit: false,
             vault_files: Vec::new(),
             list_state: ListState::default(),
-            current_dir: PathBuf::default(),
+            current_dir: PathBuf::new(),
+            current_vault,
             input: String::new(),
             cursor_position: 0,
-            confirm: None,
+            confirm,
             note_files: Vec::new(),
             note_changed: false,
             editor: EditorState::default(),
             editor_handler: EditorEventHandler::default(),
-            current_note: PathBuf::default(),
+            current_note: PathBuf::new(),
             saved_content: String::new(),
             last_cursor_mode: None,
         }
     }
 
     fn view(&mut self, frame: &mut Frame) {
+        self.apply_cursor_shape();
+
         match self.state {
             AppState::Menu => self.menu(frame),
             AppState::VaultSelect => self.vault_select(frame),
@@ -141,8 +162,6 @@ impl App {
         if let Some(prompt) = &self.confirm {
             self.draw_confirm(frame, frame.area(), prompt);
         }
-
-        self.apply_cursor_shape();
     }
 
     fn centered_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -337,6 +356,11 @@ impl App {
                         self.confirm = None;
                         self.state = AppState::Note;
                     }
+                    ConfirmSubject::StartVault => {
+                        self.load_note_items();
+                        self.confirm = None;
+                        self.state = AppState::Note;
+                    }
                     ConfirmSubject::Exit => self.exit = true,
                 },
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -452,12 +476,7 @@ impl App {
             // TODO: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY AND USER IS NOT WARNED IN CASE
             // OF BAD INPUT
             (AppState::DirCreate, KeyCode::Enter) => {
-                // FIX: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY
-                let new_dir = format!(
-                    "{}/{}",
-                    self.current_dir.to_string_lossy(),
-                    self.input.clone()
-                );
+                let new_dir = self.current_dir.join(&self.input);
                 let _ = fs::create_dir(new_dir);
                 self.travdir(self.current_dir.clone());
                 self.list_state.select(Some(0));
@@ -489,7 +508,7 @@ impl App {
         }
     }
 
-    fn menu(&self, frame: &mut Frame) {
+    fn menu(&mut self, frame: &mut Frame) {
         let area = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -728,12 +747,19 @@ impl App {
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
+    let vault = args
+        .iter()
+        .skip(1)
+        .find(|arg| !arg.starts_with('-'))
+        .map(PathBuf::from)
+        .unwrap_or_default();
+
     for arg in args.iter().skip(1) {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!(
                     "Note taking application\n\n\
-                     Usage: {} [OPTIONS]\n\n\
+                     Usage: {} [OPTIONS] VAULT\n\n\
                      Options:\n\
                      -h, --help       Print this message\n\
                      -v, --version    Print version information",
@@ -745,20 +771,21 @@ fn main() -> io::Result<()> {
                 println!("NeoNote v0.2.0");
                 return Ok(());
             }
-            _ => {
+            other if other.starts_with('-') => {
                 eprintln!(
-                    "error: no such option or command '{}'\n\
+                    "error: no such option '{other}'\n\
                      use the option '-h' or '--help' for help\n\n\
-                     Usage: {} [OPTIONS]",
-                    arg, args[0]
+                     Usage: {} [OPTIONS] VAULT",
+                    args[0]
                 );
                 std::process::exit(1);
             }
+            _ => {}
         }
     }
 
     let mut terminal = ratatui::init();
-    let mut app = App::new();
+    let mut app = App::new(vault);
 
     while !app.exit {
         terminal.draw(|frame| app.view(frame))?;
