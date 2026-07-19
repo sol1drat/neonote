@@ -727,6 +727,37 @@ impl App {
 }
 
 fn main() -> io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    for arg in args.iter().skip(1) {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!(
+                    "Note taking application\n\n\
+                     Usage: {} [OPTIONS]\n\n\
+                     Options:\n\
+                     -h, --help       Print this message\n\
+                     -v, --version    Print the current version",
+                    args[0]
+                );
+                return Ok(());
+            }
+            "--version" | "-v" => {
+                println!("NeoNote v0.1.0");
+                return Ok(());
+            }
+            _ => {
+                eprintln!(
+                    "error: no such option or command '{}'\n\
+                     use the option '-h' or '--help' for help\n\n\
+                     Usage: {} [OPTIONS]",
+                    arg, args[0]
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
     let mut terminal = ratatui::init();
     let mut app = App::new();
 
