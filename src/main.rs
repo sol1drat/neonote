@@ -1,10 +1,14 @@
 // TODO: IMPROVE STRUCTURE BY MOVING MODULES TO DIFFERENT FILES
 // TODO: ADD CACHE SO AppState IS STORED AND PERSISTED
-// TODO: ADD DIRECTORY AND FILE CREATION
 // TODO: THROW ERROR IF VAULT DIRECTORY DOESN'T EXIST
-// TODO: FIX UP CONFIRM PROMPT
+// TODO: FIX UI INCONSISTENCIES
+// TODO: ADD COMMAND HELP SCREEN
 
-use std::{fs, io, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use crossterm::{
     self,
@@ -27,7 +31,7 @@ use walkdir::WalkDir;
 enum AppState {
     Menu,
     VaultSelect,
-    DirCreate,
+    Note,
 }
 
 enum FocusedTab {
@@ -46,6 +50,14 @@ struct ConfirmPrompt {
     subject: ConfirmSubject,
 }
 
+struct FileCreate {
+    message: String,
+    path: PathBuf,
+    is_dir: bool,
+    input: String,
+    cursor_position: usize,
+}
+
 #[derive(Clone)]
 struct NoteItem {
     path: PathBuf,
@@ -62,9 +74,8 @@ struct App {
     list_state: ListState,
     current_vault: PathBuf,
     current_dir: PathBuf,
-    input: String,
-    cursor_position: usize,
     confirm: Option<ConfirmPrompt>,
+    file_create: Option<FileCreate>,
     note_files: Vec<NoteItem>,
     editor: EditorState,
     editor_handler: EditorEventHandler,
@@ -134,9 +145,8 @@ impl App {
             list_state: ListState::default(),
             current_dir: PathBuf::new(),
             current_vault,
-            input: String::new(),
-            cursor_position: 0,
             confirm,
+            file_create: None,
             note_files: Vec::new(),
             note_changed: false,
             editor: EditorState::default(),
@@ -147,21 +157,109 @@ impl App {
         }
     }
 
+    fn creation_base_dir(&self) -> PathBuf {
+        if let Some(idx) = self.list_state.selected() {
+            if let Some(item) = self.note_files.get(idx) {
+                if item.is_dir {
+                    return item.path.clone();
+                } else {
+                    return item
+                        .path
+                        .parent()
+                        .unwrap_or(&self.current_vault)
+                        .to_path_buf();
+                }
+            }
+        }
+        self.current_vault.clone()
+    }
+
+    fn reload_note_tree(&mut self, force_expand: Option<&Path>) {
+        let mut expanded: HashSet<PathBuf> = self
+            .note_files
+            .iter()
+            .filter(|i| i.expanded)
+            .map(|i| i.path.clone())
+            .collect();
+
+        if let Some(p) = force_expand {
+            expanded.insert(p.to_path_buf());
+        }
+
+        let mut items = Vec::new();
+        self.build_tree_level(&self.current_vault, 0, &expanded, &mut items);
+        self.note_files = items;
+
+        if self.note_files.is_empty() {
+            self.list_state.select(None);
+        } else {
+            let current = self.list_state.selected().unwrap_or(0);
+            self.list_state
+                .select(Some(current.min(self.note_files.len() - 1)));
+        }
+    }
+
+    fn build_tree_level(
+        &self,
+        dir: &Path,
+        depth: usize,
+        expanded: &HashSet<PathBuf>,
+        items: &mut Vec<NoteItem>,
+    ) {
+        let mut entries: Vec<NoteItem> = Vec::new();
+        if let Ok(read_dir) = fs::read_dir(dir) {
+            for entry in read_dir.flatten() {
+                let path = entry.path();
+                if path
+                    .file_name()
+                    .map_or(false, |n| n.to_str().map_or(false, |s| s.starts_with('.')))
+                {
+                    continue;
+                }
+                let is_dir = path.is_dir();
+                let is_expanded = expanded.contains(&path);
+                entries.push(NoteItem {
+                    path,
+                    depth,
+                    is_dir,
+                    expanded: is_expanded,
+                });
+            }
+        }
+        entries.sort_by_key(|i| {
+            (
+                !i.is_dir,
+                i.path
+                    .file_name()
+                    .map_or(String::new(), |n| n.to_string_lossy().to_string()),
+            )
+        });
+
+        for entry in entries {
+            let should_expand = entry.is_dir && entry.expanded;
+            items.push(entry);
+            if should_expand {
+                let path = items.last().unwrap().path.clone();
+                self.build_tree_level(&path, depth + 1, expanded, items);
+            }
+        }
+    }
+
     fn view(&mut self, frame: &mut Frame) {
         self.apply_cursor_shape();
 
         match self.state {
             AppState::Menu => self.menu(frame),
             AppState::VaultSelect => self.vault_select(frame),
-            AppState::DirCreate => {
-                self.vault_select(frame);
-                self.dir_create(frame);
-            }
             AppState::Note => self.note(frame),
         }
 
         if let Some(prompt) = &self.confirm {
             self.draw_confirm(frame, frame.area(), prompt);
+        }
+
+        if let Some(prompt) = &self.file_create {
+            self.draw_file_create(frame, frame.area(), prompt);
         }
     }
 
@@ -196,6 +294,52 @@ impl App {
             .block(Block::bordered().title(" Confirm "));
 
         frame.render_widget(widget, popup);
+    }
+
+    fn draw_file_create(&self, frame: &mut Frame, area: Rect, prompt: &FileCreate) {
+        let height = 3u16;
+        let width = 50u16;
+
+        let x = area.x + (area.width.saturating_sub(width)) / 2;
+        let y = area.y + (area.height.saturating_sub(height)) / 2;
+        let popup = Rect::new(x, y, width.min(area.width), height.min(area.height));
+
+        frame.render_widget(Clear, popup);
+
+        let block = Block::bordered()
+            .title(format!(" {} ", prompt.message))
+            .title_bottom(Line::from(vec![" Esc".bold(), " to cancel ".into()]))
+            .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
+            .title_alignment(Alignment::Center);
+
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+
+        let inner_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .split(inner);
+
+        let input_area = inner_layout[0];
+        let visible_width = input_area.width as usize;
+        let mut cursor_offset = prompt.cursor_position.min(prompt.input.len());
+
+        let display_start = if cursor_offset > visible_width {
+            cursor_offset - visible_width
+        } else {
+            0
+        };
+
+        let chars: Vec<char> = prompt.input.chars().collect();
+        let display_end = (display_start + visible_width).min(chars.len());
+        let visible_text: String = chars[display_start..display_end].iter().collect();
+
+        cursor_offset -= display_start;
+        cursor_offset = cursor_offset.min(visible_width.saturating_sub(1));
+
+        let input = Paragraph::new(visible_text).style(Style::default().fg(Color::Yellow));
+        frame.render_widget(input, input_area);
+        frame.set_cursor_position((input_area.x + cursor_offset as u16, input_area.y));
     }
 
     fn travdir(&mut self, dir_path: PathBuf) {
@@ -372,6 +516,82 @@ impl App {
             return;
         }
 
+        if self.file_create.is_some() {
+            match key.code {
+                KeyCode::Esc => {
+                    self.file_create = None;
+                }
+                KeyCode::Enter => {
+                    let (name, base, is_dir) = {
+                        let p = self.file_create.as_ref().unwrap();
+                        (p.input.clone(), p.path.clone(), p.is_dir)
+                    };
+                    let in_note = matches!(self.state, AppState::Note);
+                    let in_vault = matches!(self.state, AppState::VaultSelect);
+
+                    self.file_create = None;
+
+                    if !name.is_empty() {
+                        let new_path = base.join(&name);
+                        if is_dir {
+                            let _ = fs::create_dir(&new_path);
+                        } else {
+                            let _ = fs::write(&new_path, "");
+                        }
+
+                        if in_vault {
+                            self.travdir(self.current_dir.clone());
+                            let current = self.list_state.selected().unwrap_or(0);
+                            self.list_state.select(Some(
+                                current.min(self.vault_files.len().saturating_sub(1)),
+                            ));
+                        } else if in_note {
+                            let parent = new_path
+                                .parent()
+                                .unwrap_or(&self.current_vault)
+                                .to_path_buf();
+                            self.reload_note_tree(Some(&parent));
+                            if let Some(idx) =
+                                self.note_files.iter().position(|i| i.path == new_path)
+                            {
+                                self.list_state.select(Some(idx));
+                            }
+                        }
+                    }
+                }
+                KeyCode::Char(c) => {
+                    if let Some(p) = self.file_create.as_mut() {
+                        p.input.insert(p.cursor_position, c);
+                        p.cursor_position += 1;
+                    }
+                }
+                KeyCode::Backspace => {
+                    if let Some(p) = self.file_create.as_mut() {
+                        if p.cursor_position > 0 {
+                            p.input.remove(p.cursor_position - 1);
+                            p.cursor_position -= 1;
+                        }
+                    }
+                }
+                KeyCode::Left => {
+                    if let Some(p) = self.file_create.as_mut() {
+                        if p.cursor_position > 0 {
+                            p.cursor_position -= 1;
+                        }
+                    }
+                }
+                KeyCode::Right => {
+                    if let Some(p) = self.file_create.as_mut() {
+                        if p.cursor_position < p.input.len() {
+                            p.cursor_position += 1;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+
         if matches!(self.state, AppState::Note) && matches!(self.focused_tab, FocusedTab::Editor) {
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
                 let _ = self.save_current_note();
@@ -403,6 +623,26 @@ impl App {
                 KeyCode::Char('k') => self.select_previous(),
                 KeyCode::Tab => self.focused_tab = FocusedTab::Editor,
                 KeyCode::Char('q') => self.confirm_exit(),
+                KeyCode::Char('c') => {
+                    let base = self.creation_base_dir();
+                    self.file_create = Some(FileCreate {
+                        message: "Create Directory".into(),
+                        path: base,
+                        is_dir: true,
+                        input: String::new(),
+                        cursor_position: 0,
+                    });
+                }
+                KeyCode::Char('f') => {
+                    let base = self.creation_base_dir();
+                    self.file_create = Some(FileCreate {
+                        message: "Create File".into(),
+                        path: base,
+                        is_dir: false,
+                        input: String::new(),
+                        cursor_position: 0,
+                    });
+                }
                 KeyCode::Enter => {
                     if let Some(idx) = self.list_state.selected() {
                         if let Some(item) = self.note_files.get(idx) {
@@ -466,44 +706,14 @@ impl App {
                     }
                 }
             }
-            (AppState::VaultSelect, KeyCode::Char('c')) => self.state = AppState::DirCreate,
-
-            (AppState::DirCreate, KeyCode::Esc) => {
-                self.state = AppState::VaultSelect;
-                self.input.clear();
-                self.cursor_position = 0;
-            }
-
-            // TODO: INPUT IS NOT CHECKED BEFORE CREATING DIRECTORY AND USER IS NOT WARNED IN CASE
-            // OF BAD INPUT
-            (AppState::DirCreate, KeyCode::Enter) => {
-                let new_dir = self.current_dir.join(&self.input);
-                let _ = fs::create_dir(new_dir);
-                self.travdir(self.current_dir.clone());
-                self.list_state.select(Some(0));
-                self.state = AppState::VaultSelect;
-                self.input.clear();
-                self.cursor_position = 0;
-            }
-            (AppState::DirCreate, KeyCode::Char(c)) => {
-                self.input.insert(self.cursor_position, c);
-                self.cursor_position += 1;
-            }
-            (AppState::DirCreate, KeyCode::Backspace) => {
-                if self.cursor_position > 0 {
-                    self.input.remove(self.cursor_position - 1);
-                    self.cursor_position -= 1;
-                }
-            }
-            (AppState::DirCreate, KeyCode::Left) => {
-                if self.cursor_position > 0 {
-                    self.cursor_position -= 1;
-                }
-            }
-            (AppState::DirCreate, KeyCode::Right) => {
-                if self.cursor_position < self.input.len() {
-                    self.cursor_position += 1;
-                }
+            (AppState::VaultSelect, KeyCode::Char('c')) => {
+                self.file_create = Some(FileCreate {
+                    message: "Create Directory".into(),
+                    path: self.current_dir.clone(),
+                    is_dir: true,
+                    input: String::new(),
+                    cursor_position: 0,
+                });
             }
             _ => {}
         }
@@ -572,7 +782,7 @@ impl App {
                 Block::bordered()
                     .title(format!(" Path: {} ", self.current_dir.display()))
                     .title_bottom(Line::from(vec![" h/j/k/l".bold(), " to move ".into()]))
-                    .title_bottom(Line::from(vec![" c".bold(), " to create vault ".into()]))
+                    .title_bottom(Line::from(vec![" c".bold(), " to create dir ".into()]))
                     .title_bottom(Line::from(vec![" Enter".bold(), " to open vault ".into()]))
                     .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
                     .title_alignment(Alignment::Center),
@@ -585,45 +795,6 @@ impl App {
             )
             .highlight_symbol(" -> ");
         frame.render_stateful_widget(list, outer_padded_area, &mut self.list_state);
-    }
-
-    fn dir_create(&mut self, frame: &mut Frame) {
-        let height = 3u16;
-        let width = 45u16;
-        let x = frame.area().x + (frame.area().width.saturating_sub(width)) / 2;
-        let y = frame.area().y + (frame.area().height.saturating_sub(height)) / 2;
-        let area = Rect::new(
-            x,
-            y,
-            width.min(frame.area().width),
-            height.min(frame.area().height),
-        );
-        frame.render_widget(Clear, area);
-
-        let block = Block::bordered()
-            .title(" Create vault ")
-            .title_bottom(Line::from(vec![" Esc".bold(), " to close ".into()]))
-            .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
-            .title_alignment(Alignment::Center);
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
-        let visible_width = inner.width as usize;
-        let mut cursor_offset = self.cursor_position.min(self.input.len());
-        let display_start = if cursor_offset > visible_width {
-            cursor_offset - visible_width
-        } else {
-            0
-        };
-        let chars: Vec<char> = self.input.chars().collect();
-        let display_end = (display_start + visible_width).min(chars.len());
-        let visible_text: String = chars[display_start..display_end].iter().collect();
-        cursor_offset -= display_start;
-        cursor_offset = cursor_offset.min(visible_width.saturating_sub(1));
-
-        let input = Paragraph::new(visible_text).style(Style::default().fg(Color::Yellow));
-        frame.render_widget(input, inner);
-        frame.set_cursor_position((inner.x + cursor_offset as u16, inner.y));
     }
 
     fn note(&mut self, frame: &mut Frame) {
@@ -698,6 +869,9 @@ impl App {
                     ))
                     .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
                     .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
+                    .title_bottom(Line::from(vec![" Tab".bold(), " to switch ".into()]))
+                    .title_bottom(Line::from(vec![" c".bold(), " new dir ".into()]))
+                    .title_bottom(Line::from(vec![" f".bold(), " new file ".into()]))
                     .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
                     .border_style(explorer_border_style),
             )
