@@ -928,18 +928,7 @@ fn main() -> io::Result<()> {
         .iter()
         .skip(1)
         .find(|arg| !arg.starts_with('-'))
-        .map(PathBuf::from)
-        .unwrap_or_default();
-
-    if !vault.exists() {
-        eprintln!(
-            "error: path does not exist or is not accessible\n\
-             use the option '-h' or '--help' for help\n\n\
-             Usage: {} [OPTIONS] VAULT",
-            args[0]
-        );
-        exit(1);
-    }
+        .map(PathBuf::from);
 
     for arg in args.iter().skip(1) {
         match arg.as_str() {
@@ -969,6 +958,18 @@ fn main() -> io::Result<()> {
             }
             _ => {}
         }
+    }
+
+    let vault = vault.unwrap_or_default();
+
+    if !vault.as_os_str().is_empty() && !vault.exists() {
+        eprintln!(
+            "error: path does not exist or is not accessible\n\
+             use the option '-h' or '--help' for help\n\n\
+             Usage: {} [OPTIONS] VAULT",
+            args[0]
+        );
+        exit(1);
     }
 
     let mut terminal = ratatui::init();
