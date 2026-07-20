@@ -3,11 +3,13 @@
 // TODO: THROW ERROR IF VAULT DIRECTORY DOESN'T EXIST
 // TODO: FIX UI INCONSISTENCIES
 // TODO: ADD COMMAND HELP SCREEN
+// TODO: ADD FILE/DIRECTORY RENAMING, MOVING AND DELETION
 
 use std::{
     collections::HashSet,
     fs, io,
     path::{Path, PathBuf},
+    process::exit,
 };
 
 use crossterm::{
@@ -929,6 +931,16 @@ fn main() -> io::Result<()> {
         .map(PathBuf::from)
         .unwrap_or_default();
 
+    if !vault.exists() {
+        eprintln!(
+            "error: path does not exist or is not accessible\n\
+             use the option '-h' or '--help' for help\n\n\
+             Usage: {} [OPTIONS] VAULT",
+            args[0]
+        );
+        exit(1);
+    }
+
     for arg in args.iter().skip(1) {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -953,7 +965,7 @@ fn main() -> io::Result<()> {
                      Usage: {} [OPTIONS] VAULT",
                     args[0]
                 );
-                std::process::exit(1);
+                exit(1);
             }
             _ => {}
         }
