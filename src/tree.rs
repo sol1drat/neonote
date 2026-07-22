@@ -26,13 +26,25 @@ impl App {
         }
 
         let mut items = Vec::new();
-        self.build_tree_level(&self.current_vault, 0, &expanded, &mut items);
+
+        let root_expanded = expanded.contains(&self.current_vault);
+        items.push(NoteItem {
+            path: self.current_vault.clone(),
+            depth: 0,
+            is_dir: true,
+            expanded: root_expanded,
+        });
+
+        if root_expanded {
+            self.build_tree_level(&self.current_vault, 1, &expanded, &mut items);
+        }
+
         self.note_files = items;
 
         if self.note_files.is_empty() {
             self.list_state.select(None);
         } else {
-            let current = self.list_state.selected().unwrap_or(0);
+            let current = self.list_state.selected().unwrap_or(1);
             self.list_state
                 .select(Some(current.min(self.note_files.len() - 1)));
         }
@@ -85,37 +97,16 @@ impl App {
     }
 
     pub fn load_note_items(&mut self) {
-        let mut items = Vec::new();
+        let mut items = vec![NoteItem {
+            path: self.current_vault.clone(),
+            depth: 0,
+            is_dir: true,
+            expanded: true,
+        }];
 
-        if let Ok(read_dir) = fs::read_dir(&self.current_vault) {
-            for entry in read_dir.flatten() {
-                let path = entry.path();
-                if path
-                    .file_name()
-                    .map_or(false, |n| n.to_str().map_or(false, |s| s.starts_with('.')))
-                {
-                    continue;
-                }
-
-                let is_dir = path.is_dir();
-
-                items.push(NoteItem {
-                    path,
-                    depth: 0,
-                    is_dir,
-                    expanded: false,
-                });
-            }
-        }
-
-        items.sort_by_key(|i| {
-            (
-                !i.is_dir,
-                i.path
-                    .file_name()
-                    .map_or(String::new(), |n| n.to_string_lossy().to_string()),
-            )
-        });
+        let mut expanded = HashSet::new();
+        expanded.insert(self.current_vault.clone());
+        self.build_tree_level(&self.current_vault, 1, &expanded, &mut items);
 
         self.note_files = items;
         self.editor = edtui::EditorState::default();
@@ -125,7 +116,8 @@ impl App {
         if self.note_files.is_empty() {
             self.list_state.select(None);
         } else {
-            self.list_state.select(Some(0));
+            let select_idx = if self.note_files.len() > 1 { 1 } else { 0 };
+            self.list_state.select(Some(select_idx));
         }
     }
 

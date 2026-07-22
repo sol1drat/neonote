@@ -147,13 +147,6 @@ impl App {
             .block(
                 Block::bordered()
                     .title(" Explorer ")
-                    .title(format!(
-                        " {} ",
-                        self.current_vault
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                    ))
                     .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
                     .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
                     .title_bottom(Line::from(vec![" Tab".bold(), " to switch ".into()]))
