@@ -30,6 +30,12 @@ pub struct FileCreate {
     pub cursor_position: usize,
 }
 
+pub struct FileRename {
+    pub path: PathBuf,
+    pub input: String,
+    pub cursor_position: usize,
+}
+
 #[derive(Clone)]
 pub struct NoteItem {
     pub path: PathBuf,

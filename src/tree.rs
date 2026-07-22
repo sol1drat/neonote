@@ -8,6 +8,11 @@ use crate::app::App;
 use crate::types::NoteItem;
 
 impl App {
+    pub fn get_selected_note_item(&self) -> Option<&NoteItem> {
+        let idx = self.list_state.selected()?;
+        self.note_files.get(idx)
+    }
+
     pub fn reload_note_tree(&mut self, force_expand: Option<&Path>) {
         let mut expanded: HashSet<PathBuf> = self
             .note_files

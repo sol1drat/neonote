@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use edtui::EditorMode;
 
 use crate::app::App;
-use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FocusedTab};
+use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab};
 
 impl App {
     pub fn update(&mut self, key: KeyEvent) {
@@ -106,6 +106,64 @@ impl App {
                 _ => {}
             }
             return;
+        } else if self.file_rename.is_some() {
+            match key.code {
+                KeyCode::Esc => {
+                    self.file_rename = None;
+                }
+                KeyCode::Enter => {
+                    let (name, base) = {
+                        let p = self.file_rename.as_ref().unwrap();
+                        (p.input.clone(), p.path.clone())
+                    };
+
+                    self.file_rename = None;
+
+                    if !name.is_empty() {
+                        let new_path = base.parent().unwrap().join(&name);
+                        let _ = fs::rename(base, &new_path);
+
+                        let parent = new_path
+                            .parent()
+                            .unwrap_or(&self.current_vault)
+                            .to_path_buf();
+                        self.reload_note_tree(Some(&parent));
+                        if let Some(idx) = self.note_files.iter().position(|i| i.path == new_path) {
+                            self.list_state.select(Some(idx));
+                        }
+                    }
+                }
+                KeyCode::Char(c) => {
+                    if let Some(p) = self.file_rename.as_mut() {
+                        p.input.insert(p.cursor_position, c);
+                        p.cursor_position += 1;
+                    }
+                }
+                KeyCode::Backspace => {
+                    if let Some(p) = self.file_rename.as_mut() {
+                        if p.cursor_position > 0 {
+                            p.input.remove(p.cursor_position - 1);
+                            p.cursor_position -= 1;
+                        }
+                    }
+                }
+                KeyCode::Left => {
+                    if let Some(p) = self.file_rename.as_mut() {
+                        if p.cursor_position > 0 {
+                            p.cursor_position -= 1;
+                        }
+                    }
+                }
+                KeyCode::Right => {
+                    if let Some(p) = self.file_rename.as_mut() {
+                        if p.cursor_position < p.input.len() {
+                            p.cursor_position += 1;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return;
         }
 
         if matches!(self.state, AppState::Note) && matches!(self.focused_tab, FocusedTab::Editor) {
@@ -159,6 +217,16 @@ impl App {
                         cursor_position: 0,
                     });
                 }
+                KeyCode::Char('r') => {
+                    if let Some(item) = self.get_selected_note_item() {
+                        self.file_rename = Some(FileRename {
+                            path: item.path.clone(),
+                            input: String::new(),
+                            cursor_position: 0,
+                        });
+                    }
+                }
+
                 KeyCode::Enter => {
                     if let Some(idx) = self.list_state.selected() {
                         if let Some(item) = self.note_files.get(idx) {

@@ -4,7 +4,9 @@ use crossterm::{cursor::SetCursorStyle, execute};
 use edtui::{EditorEventHandler, EditorMode, EditorState};
 use ratatui::widgets::ListState;
 
-use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FocusedTab, NoteItem};
+use crate::types::{
+    AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab, NoteItem,
+};
 
 pub struct App {
     pub state: AppState,
@@ -16,6 +18,7 @@ pub struct App {
     pub current_dir: PathBuf,
     pub confirm: Option<ConfirmPrompt>,
     pub file_create: Option<FileCreate>,
+    pub file_rename: Option<FileRename>,
     pub note_files: Vec<NoteItem>,
     pub editor: EditorState,
     pub editor_handler: EditorEventHandler,
@@ -52,6 +55,7 @@ impl App {
             current_vault,
             confirm,
             file_create: None,
+            file_rename: None,
             note_files: Vec::new(),
             note_changed: false,
             editor: EditorState::default(),
@@ -95,6 +99,10 @@ impl App {
 
         if let Some(prompt) = &self.file_create {
             self.draw_file_create(frame, frame.area(), prompt);
+        }
+
+        if let Some(prompt) = &self.file_rename {
+            self.draw_file_rename(frame, frame.area(), prompt);
         }
     }
 

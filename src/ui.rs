@@ -6,9 +6,9 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, Paragraph},
 };
 
-use crate::app::App;
 use crate::constants::{DESCRIPTION, TITLE};
 use crate::types::{ConfirmPrompt, FileCreate, FocusedTab};
+use crate::{app::App, types::FileRename};
 
 impl App {
     pub fn menu(&mut self, frame: &mut ratatui::Frame) {
@@ -87,7 +87,7 @@ impl App {
     pub fn note(&mut self, frame: &mut ratatui::Frame) {
         let outer = frame.area();
         let outer_block = Block::bordered()
-            .title(" NeoNote ")
+            .title(format!(" {} ", TITLE))
             .title_alignment(Alignment::Center);
         let inner = outer_block.inner(outer);
         frame.render_widget(outer_block, outer);
@@ -250,6 +250,52 @@ impl App {
 
         let block = Block::bordered()
             .title(format!(" {} ", prompt.message))
+            .title_bottom(Line::from(vec![" Esc".bold(), " to cancel ".into()]))
+            .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
+            .title_alignment(Alignment::Center);
+
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+
+        let inner_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .split(inner);
+
+        let input_area = inner_layout[0];
+        let visible_width = input_area.width as usize;
+        let mut cursor_offset = prompt.cursor_position.min(prompt.input.len());
+
+        let display_start = if cursor_offset > visible_width {
+            cursor_offset - visible_width
+        } else {
+            0
+        };
+
+        let chars: Vec<char> = prompt.input.chars().collect();
+        let display_end = (display_start + visible_width).min(chars.len());
+        let visible_text: String = chars[display_start..display_end].iter().collect();
+
+        cursor_offset -= display_start;
+        cursor_offset = cursor_offset.min(visible_width.saturating_sub(1));
+
+        let input = Paragraph::new(visible_text).style(Style::default().fg(Color::Yellow));
+        frame.render_widget(input, input_area);
+        frame.set_cursor_position((input_area.x + cursor_offset as u16, input_area.y));
+    }
+
+    pub fn draw_file_rename(&self, frame: &mut ratatui::Frame, area: Rect, prompt: &FileRename) {
+        let height = 3u16;
+        let width = 50u16;
+
+        let x = area.x + (area.width.saturating_sub(width)) / 2;
+        let y = area.y + (area.height.saturating_sub(height)) / 2;
+        let popup = Rect::new(x, y, width.min(area.width), height.min(area.height));
+
+        frame.render_widget(Clear, popup);
+
+        let block = Block::bordered()
+            .title(" Rename ")
             .title_bottom(Line::from(vec![" Esc".bold(), " to cancel ".into()]))
             .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
             .title_alignment(Alignment::Center);
