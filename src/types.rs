@@ -15,6 +15,7 @@ pub enum ConfirmSubject {
     Vault,
     Exit,
     StartVault,
+    Delete,
 }
 
 pub struct ConfirmPrompt {

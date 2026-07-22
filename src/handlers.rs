@@ -1,7 +1,8 @@
 use std::fs;
+use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use edtui::EditorMode;
+use edtui::{EditorMode, EditorState};
 
 use crate::app::App;
 use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab};
@@ -23,6 +24,32 @@ impl App {
                         self.state = AppState::Note;
                     }
                     ConfirmSubject::Exit => self.exit = true,
+                    ConfirmSubject::Delete => {
+                        if let Some(item) = self.get_selected_note_item() {
+                            let path = item.path.clone();
+                            let is_dir = item.is_dir;
+                            let parent = path.parent().unwrap_or(&self.current_vault).to_path_buf();
+
+                            if is_dir {
+                                let _ = fs::remove_dir_all(&path);
+                            } else {
+                                let _ = fs::remove_file(&path);
+                                if self.current_note == path {
+                                    self.editor = EditorState::default();
+                                    self.current_note = PathBuf::new();
+                                    self.note_changed = false;
+                                    self.saved_content = String::new();
+                                }
+                            }
+
+                            self.reload_note_tree(Some(&parent));
+
+                            let current = self.list_state.selected().unwrap_or(0);
+                            self.list_state
+                                .select(Some(current.min(self.note_files.len().saturating_sub(1))));
+                        }
+                        self.confirm = None;
+                    }
                 },
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                     self.confirm = None;
@@ -226,7 +253,17 @@ impl App {
                         });
                     }
                 }
-
+                KeyCode::Char('d') => {
+                    if let Some(item) = self.get_selected_note_item() {
+                        self.confirm = Some(ConfirmPrompt {
+                            message: format!(
+                                "Delete {} ?",
+                                item.path.file_name().unwrap().display()
+                            ),
+                            subject: ConfirmSubject::Delete,
+                        });
+                    }
+                }
                 KeyCode::Enter => {
                     if let Some(idx) = self.list_state.selected() {
                         if let Some(item) = self.note_files.get(idx) {
