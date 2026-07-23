@@ -127,8 +127,6 @@ A `*` next to the filename in the editor title means unsaved changes.
 
 ## Limitations
 
-Things that don't work yet, so you're not surprised:
-
 - **No undo/redo beyond what edtui provides**, save before risky edits
 - **Quitting discards unsaved changes silently**, the confirm prompt doesn't
   check for unsaved buffers yet
