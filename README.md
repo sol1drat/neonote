@@ -2,12 +2,12 @@
 
 Keyboard-first Markdown note taking in your terminal.
 
+![NeoNote Demo](docs/demo.gif)
+
 A small, fast, no-account, no-cloud note app. Point it at a directory, browse
 your Markdown files as a tree, edit them with a vim-style editor.
 
 *NeoNote is currently in a barely enough usable state, do not expect much.*
-
-![NeoNote Demo](docs/demo.gif)
 
 ## Why
 
