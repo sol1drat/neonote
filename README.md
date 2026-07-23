@@ -12,7 +12,7 @@ your Markdown files as a tree, edit them with a vim-style editor.
 ## Why
 
 - **Local first** plain `.md` files on disk. No database, no sync, no server
-- **Keyboard first**, every action is one or two keystrokes. No mouse hunting
+- **Keyboard first**, every action is one or two keystrokes. No mouse
 - **Single binary**, minimal dependencies. Starts instantly, runs anywhere
 - **Stays out of the way**, no telemetry, no bloated sidebars. Just notes
 
