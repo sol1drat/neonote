@@ -38,7 +38,7 @@ Or, if you have `cargo` set up:
 cargo install --git https://github.com/sol1drat/neonote.git
 ```
 
-### Nix
+### NixOs
 
 A `shell.nix` is provided for development and cross-compilation:
 
