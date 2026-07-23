@@ -155,7 +155,7 @@ Bug reports and suggestions are very welcome.
 A few things especially appreciated right now:
 
 - Testing on terminals I haven't tried (Windows Terminal, WezTerm, Kitty,
-  Alacritty, , Contour) and reporting rendering bugs.
+  Alacritty) and reporting rendering bugs.
 - Reproductions for the bugs.
 
 ## License
