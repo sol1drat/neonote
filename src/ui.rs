@@ -185,6 +185,7 @@ impl App {
             .title_bottom(Line::from(vec![" Esc".bold(), " to exit ".into()]))
             .title_bottom(Line::from(vec![" Ctrl+s".bold(), " to save ".into()]))
             .title_bottom(Line::from(vec![" Ctrl+q".bold(), " to quit ".into()]))
+            .style(Style::default().bg(Color::Reset))
             .border_style(editor_border_style);
 
         let theme = EditorTheme::default().block(editor_block).hide_cursor();
