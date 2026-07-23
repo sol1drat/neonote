@@ -121,7 +121,7 @@ A `*` next to the filename in the editor title means unsaved changes.
 | Key     | Action                       |
 | ------- | ---------------------------- |
 | `y`     | Confirm (in Yes/No prompts)  |
-| `n`/Esc | Cancel                       |
+| `n`/`Esc` | Cancel                       |
 | `Enter` | Confirm (in text prompts)    |
 | `Esc`   | Cancel (in text prompts)     |
 
