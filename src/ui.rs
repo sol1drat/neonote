@@ -175,8 +175,6 @@ impl App {
 
         let editor_title = if note_file_name.is_empty() {
             " Editor ".to_string()
-        } else if self.note_changed {
-            format!(" {}* ", note_file_name)
         } else {
             format!(" {} ", note_file_name)
         };
@@ -256,7 +254,6 @@ impl App {
                 "Editor",
                 &[
                     ("Esc (Normal)", "Focus file explorer"),
-                    ("Ctrl+s", "Save edits"),
                     ("Ctrl+q", "Quit the application"),
                 ],
             ),

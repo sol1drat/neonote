@@ -46,7 +46,6 @@ impl App {
                                 if self.current_note == path {
                                     self.editor = EditorState::default();
                                     self.current_note = PathBuf::new();
-                                    self.note_changed = false;
                                     self.saved_content = String::new();
                                 }
                             }
@@ -209,6 +208,7 @@ impl App {
             }
 
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
+                let _ = self.save_current_note();
                 self.confirm_exit();
                 return;
             }
@@ -220,16 +220,16 @@ impl App {
 
             self.editor_handler.on_key_event(key, &mut self.editor);
 
-            let editor_content = self.editor.lines.to_string();
-            self.note_changed =
-                !self.current_note.as_os_str().is_empty() && editor_content != self.saved_content;
             return;
         }
 
         if matches!(self.state, AppState::Note) && matches!(self.focused_tab, FocusedTab::Explorer)
         {
             match key.code {
-                KeyCode::Char('q') => self.confirm_exit(),
+                KeyCode::Char('q') => {
+                    let _ = self.save_current_note();
+                    self.confirm_exit();
+                }
                 KeyCode::Esc => self.focused_tab = FocusedTab::Editor,
                 KeyCode::Char('j') => self.select_next(),
                 KeyCode::Char('k') => self.select_previous(),
@@ -280,6 +280,7 @@ impl App {
                     self.need_help = true;
                 }
                 KeyCode::Enter => {
+                    let _ = self.save_current_note();
                     if let Some(idx) = self.list_state.selected() {
                         if let Some(item) = self.note_files.get(idx) {
                             if item.is_dir {
@@ -299,7 +300,10 @@ impl App {
 
         match (&self.state, key.code) {
             (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
-            (AppState::VaultSelect, KeyCode::Char('q')) => self.confirm_exit(),
+            (AppState::VaultSelect, KeyCode::Char('q')) => {
+                let _ = self.save_current_note();
+                self.confirm_exit();
+            }
 
             (AppState::Menu, KeyCode::Char('v')) => {
                 if let Ok(path) = std::env::current_dir() {

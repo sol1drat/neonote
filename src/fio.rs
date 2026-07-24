@@ -7,7 +7,6 @@ use crate::app::App;
 
 impl App {
     pub fn load_note_into_editor(&mut self, contents: String) {
-        self.note_changed = false;
         self.saved_content = contents.clone();
         self.editor = EditorState::new(Lines::from(contents));
     }
@@ -18,7 +17,6 @@ impl App {
         }
         let content = self.editor.lines.to_string();
         fs::write(&self.current_note, &content)?;
-        self.note_changed = false;
         self.saved_content = content;
         Ok(())
     }
