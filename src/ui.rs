@@ -104,10 +104,15 @@ impl App {
             .iter()
             .map(|item| {
                 let indent = "  ".repeat(item.depth);
-                let name = item
-                    .path
-                    .file_name()
-                    .map_or(String::new(), |n| n.to_string_lossy().to_string());
+                let name = if item.path.extension().is_some_and(|ext| ext == "md") {
+                    item.path
+                        .file_stem()
+                        .map_or(String::new(), |n| n.to_string_lossy().to_string())
+                } else {
+                    item.path
+                        .file_name()
+                        .map_or(String::new(), |n| n.to_string_lossy().to_string())
+                };
                 let symbol = if item.is_dir {
                     if item.expanded { "▾ " } else { "▸ " }
                 } else {
