@@ -257,8 +257,11 @@ impl App {
                     if let Some(item) = self.get_selected_note_item() {
                         self.file_rename = Some(FileRename {
                             path: item.path.clone(),
-                            input: String::new(),
-                            cursor_position: 0,
+                            input: item
+                                .path
+                                .file_name()
+                                .map_or(String::new(), |n| n.to_string_lossy().to_string()),
+                            cursor_position: item.path.file_name().map_or(0, |n| n.len()),
                         });
                     }
                 }
