@@ -1,4 +1,5 @@
 mod app;
+mod cache;
 mod clargs;
 mod constants;
 mod fio;

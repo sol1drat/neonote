@@ -5,6 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use edtui::{EditorMode, EditorState};
 
 use crate::app::App;
+use crate::cache::cache_vault;
 use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab};
 
 impl App {
@@ -209,6 +210,7 @@ impl App {
 
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
                 let _ = self.save_current_note();
+                cache_vault(self.current_vault.clone());
                 self.confirm_exit();
                 return;
             }
@@ -228,6 +230,7 @@ impl App {
             match key.code {
                 KeyCode::Char('q') => {
                     let _ = self.save_current_note();
+                    cache_vault(self.current_vault.clone());
                     self.confirm_exit();
                 }
                 KeyCode::Esc => self.focused_tab = FocusedTab::Editor,
@@ -302,6 +305,7 @@ impl App {
             (AppState::Menu, KeyCode::Char('q')) => self.exit = true,
             (AppState::VaultSelect, KeyCode::Char('q')) => {
                 let _ = self.save_current_note();
+                cache_vault(self.current_vault.clone());
                 self.confirm_exit();
             }
 

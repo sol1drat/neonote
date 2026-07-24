@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Help screen for keybindings
 - Renaming now shows current file name and cursor is positioned at the end
 - Auto-save
+- Caching last opened vault
 
 ### Changed
 

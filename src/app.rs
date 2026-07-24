@@ -4,6 +4,7 @@ use crossterm::{cursor::SetCursorStyle, execute};
 use edtui::{EditorEventHandler, EditorMode, EditorState};
 use ratatui::widgets::ListState;
 
+use crate::cache::{cache_exists, get_vault};
 use crate::types::{
     AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab, NoteItem,
 };
@@ -30,23 +31,33 @@ pub struct App {
 
 impl App {
     pub fn new(vault: PathBuf) -> Self {
-        let current_vault = if vault.as_os_str().is_empty() {
-            vault.clone()
+        let vault_passed = !vault.as_os_str().is_empty();
+
+        let current_vault = if vault_passed {
+            fs::canonicalize(&vault).unwrap_or(vault)
+        } else if cache_exists() {
+            get_vault().unwrap_or_default()
         } else {
-            fs::canonicalize(&vault).unwrap_or(vault.clone())
+            PathBuf::new()
         };
 
-        let confirm = if !vault.as_os_str().is_empty() {
+        let state = if !vault_passed && cache_exists() {
+            AppState::Note
+        } else {
+            AppState::Menu
+        };
+
+        let confirm = if vault_passed {
             Some(ConfirmPrompt {
-                message: format!("Open {} as a vault?", vault.to_string_lossy()),
+                message: format!("Open {} as a vault?", current_vault.to_string_lossy()),
                 subject: ConfirmSubject::StartVault,
             })
         } else {
             None
         };
 
-        Self {
-            state: AppState::Menu,
+        let mut app = Self {
+            state,
             focused_tab: FocusedTab::Explorer,
             exit: false,
             vault_files: Vec::new(),
@@ -63,7 +74,13 @@ impl App {
             saved_content: String::new(),
             last_cursor_mode: None,
             need_help: false,
+        };
+
+        if matches!(app.state, AppState::Note) {
+            app.load_note_items();
         }
+
+        app
     }
 
     pub fn select_next(&mut self) {
