@@ -9,6 +9,15 @@ use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRena
 
 impl App {
     pub fn update(&mut self, key: KeyEvent) {
+        if self.need_help {
+            match key.code {
+                KeyCode::Esc => {
+                    self.need_help = false;
+                }
+                _ => {}
+            }
+            return;
+        }
         if let Some(prompt) = &self.confirm {
             match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => match prompt.subject {
@@ -204,7 +213,7 @@ impl App {
                 return;
             }
 
-            if key.code == KeyCode::Esc && self.editor.mode == EditorMode::Normal {
+            if matches!(self.editor.mode, EditorMode::Normal) && key.code == KeyCode::Esc {
                 self.focused_tab = FocusedTab::Explorer;
                 return;
             }
@@ -220,10 +229,10 @@ impl App {
         if matches!(self.state, AppState::Note) && matches!(self.focused_tab, FocusedTab::Explorer)
         {
             match key.code {
+                KeyCode::Char('q') => self.confirm_exit(),
+                KeyCode::Esc => self.focused_tab = FocusedTab::Editor,
                 KeyCode::Char('j') => self.select_next(),
                 KeyCode::Char('k') => self.select_previous(),
-                KeyCode::Tab => self.focused_tab = FocusedTab::Editor,
-                KeyCode::Char('q') => self.confirm_exit(),
                 KeyCode::Char('c') => {
                     let base = self.creation_base_dir();
                     self.file_create = Some(FileCreate {
@@ -257,12 +266,15 @@ impl App {
                     if let Some(item) = self.get_selected_note_item() {
                         self.confirm = Some(ConfirmPrompt {
                             message: format!(
-                                "Delete {} ?",
+                                "Delete {}?",
                                 item.path.file_name().unwrap().display()
                             ),
                             subject: ConfirmSubject::Delete,
                         });
                     }
+                }
+                KeyCode::Char('h') => {
+                    self.need_help = true;
                 }
                 KeyCode::Enter => {
                     if let Some(idx) = self.list_state.selected() {

@@ -26,6 +26,7 @@ pub struct App {
     pub note_changed: bool,
     pub saved_content: String,
     pub last_cursor_mode: Option<EditorMode>,
+    pub need_help: bool,
 }
 
 impl App {
@@ -63,6 +64,7 @@ impl App {
             current_note: PathBuf::new(),
             saved_content: String::new(),
             last_cursor_mode: None,
+            need_help: false,
         }
     }
 
@@ -91,6 +93,10 @@ impl App {
             AppState::Menu => self.menu(frame),
             AppState::VaultSelect => self.vault_select(frame),
             AppState::Note => self.note(frame),
+        }
+
+        if self.need_help {
+            self.draw_help(frame, frame.area());
         }
 
         if let Some(prompt) = &self.confirm {

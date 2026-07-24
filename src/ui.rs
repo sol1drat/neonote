@@ -1,8 +1,8 @@
 use edtui::{EditorTheme, EditorView};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, Clear, List, ListItem, Paragraph},
 };
 
@@ -33,12 +33,12 @@ impl App {
             ])
             .split(area);
 
-        let title = Paragraph::new(TITLE.bold().blue()).alignment(Alignment::Center);
-        let description = Paragraph::new(DESCRIPTION).alignment(Alignment::Center);
+        let title = Paragraph::new(TITLE.bold().blue()).alignment(HorizontalAlignment::Center);
+        let description = Paragraph::new(DESCRIPTION).alignment(HorizontalAlignment::Center);
         let vault_option = Paragraph::new(Line::from(vec!["v".bold(), " to open vault".into()]))
-            .alignment(Alignment::Center);
+            .alignment(HorizontalAlignment::Center);
         let quit_option = Paragraph::new(Line::from(vec!["q".bold(), " to quit".into()]))
-            .alignment(Alignment::Center);
+            .alignment(HorizontalAlignment::Center);
 
         frame.render_widget(title, inner[0]);
         frame.render_widget(description, inner[2]);
@@ -72,7 +72,7 @@ impl App {
                     .title_bottom(Line::from(vec![" c".bold(), " to create dir ".into()]))
                     .title_bottom(Line::from(vec![" Enter".bold(), " to open vault ".into()]))
                     .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
-                    .title_alignment(Alignment::Center),
+                    .title_alignment(HorizontalAlignment::Center),
             )
             .highlight_style(
                 Style::default()
@@ -88,7 +88,7 @@ impl App {
         let outer = frame.area();
         let outer_block = Block::bordered()
             .title(format!(" {} ", TITLE))
-            .title_alignment(Alignment::Center);
+            .title_alignment(HorizontalAlignment::Center);
         let inner = outer_block.inner(outer);
         frame.render_widget(outer_block, outer);
 
@@ -147,11 +147,7 @@ impl App {
             .block(
                 Block::bordered()
                     .title(" Explorer ")
-                    .title_bottom(Line::from(vec![" j/k".bold(), " to move ".into()]))
-                    .title_bottom(Line::from(vec![" Enter".bold(), " to open ".into()]))
-                    .title_bottom(Line::from(vec![" Tab".bold(), " to switch ".into()]))
-                    .title_bottom(Line::from(vec![" c".bold(), " new dir ".into()]))
-                    .title_bottom(Line::from(vec![" f".bold(), " new file ".into()]))
+                    .title_bottom(Line::from(vec![" h".bold(), " for help ".into()]))
                     .title_bottom(Line::from(vec![" q".bold(), " to quit ".into()]))
                     .border_style(explorer_border_style),
             )
@@ -182,8 +178,10 @@ impl App {
 
         let editor_block = Block::bordered()
             .title(editor_title)
-            .title_bottom(Line::from(vec![" Esc".bold(), " to exit ".into()]))
-            .title_bottom(Line::from(vec![" Ctrl+s".bold(), " to save ".into()]))
+            .title_bottom(Line::from(vec![
+                " Esc (Normal)".bold(),
+                " to switch focus ".into(),
+            ]))
             .title_bottom(Line::from(vec![" Ctrl+q".bold(), " to quit ".into()]))
             .style(Style::default().bg(Color::Reset))
             .border_style(editor_border_style);
@@ -219,6 +217,91 @@ impl App {
             .split(vertical[1])[1]
     }
 
+    pub fn draw_help(&self, frame: &mut ratatui::Frame, area: Rect) {
+        let popup = self.centered_rect(40, 60, area);
+        frame.render_widget(Clear, popup);
+
+        let key_style = Style::new().bold().yellow();
+        let section_style = Style::new().bold().cyan().underlined();
+        let desc_style = Style::default().dim();
+
+        let sections: &[(&str, &[(&str, &str)])] = &[
+            (
+                "General",
+                &[
+                    ("q", "Quit the application"),
+                    ("h", "Show this help screen"),
+                    ("Esc", "Close this popup"),
+                ],
+            ),
+            (
+                "File Explorer",
+                &[
+                    ("q", "Quit the application"),
+                    ("j/k", "Move selection down/up"),
+                    ("Enter", "Open file/dir"),
+                    ("Esc", "Focus editor"),
+                    ("c", "Create directory"),
+                    ("f", "Create file"),
+                    ("r", "Rename file/dir"),
+                    ("d", "Delete file/dir"),
+                ],
+            ),
+            (
+                "Editor",
+                &[
+                    ("Esc (Normal)", "Focus file explorer"),
+                    ("Ctrl+s", "Save edits"),
+                    ("Ctrl+q", "Quit the application"),
+                ],
+            ),
+        ];
+
+        let max_key_len = sections
+            .iter()
+            .flat_map(|(_, bindings)| bindings.iter())
+            .map(|(keys, _)| keys.len())
+            .max()
+            .unwrap_or(0);
+
+        let max_desc_len = sections
+            .iter()
+            .flat_map(|(_, bindings)| bindings.iter())
+            .map(|(_, desc)| desc.len())
+            .max()
+            .unwrap_or(0);
+
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, (title, bindings)) in sections.iter().enumerate() {
+            if i > 0 {
+                lines.push(Line::from(""));
+            }
+            lines.push(Line::from(Span::styled(*title, section_style)));
+
+            for (keys, desc) in bindings.iter() {
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{:<width$}", keys, width = max_key_len), key_style),
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("{:<width$}", desc, width = max_desc_len),
+                        desc_style,
+                    ),
+                ]));
+            }
+        }
+
+        let widget = Paragraph::new(lines)
+            .alignment(HorizontalAlignment::Center)
+            .block(
+                Block::bordered()
+                    .title(" Help ")
+                    .title_bottom(Line::from(vec![" Esc".bold(), " to close ".into()]))
+                    .title_alignment(HorizontalAlignment::Center),
+            );
+
+        frame.render_widget(widget, popup);
+    }
+
     pub fn draw_confirm(&self, frame: &mut ratatui::Frame, area: Rect, prompt: &ConfirmPrompt) {
         let popup = self.centered_rect(50, 20, area);
 
@@ -226,7 +309,7 @@ impl App {
 
         let text = format!("{}\n\n[Y] Yes    [N] No", prompt.message);
         let widget = Paragraph::new(text)
-            .alignment(Alignment::Center)
+            .alignment(HorizontalAlignment::Center)
             .block(Block::bordered().title(" Confirm "));
 
         frame.render_widget(widget, popup);
@@ -246,7 +329,7 @@ impl App {
             .title(format!(" {} ", prompt.message))
             .title_bottom(Line::from(vec![" Esc".bold(), " to cancel ".into()]))
             .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
-            .title_alignment(Alignment::Center);
+            .title_alignment(HorizontalAlignment::Center);
 
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
@@ -292,7 +375,7 @@ impl App {
             .title(" Rename ")
             .title_bottom(Line::from(vec![" Esc".bold(), " to cancel ".into()]))
             .title_bottom(Line::from(vec![" Enter".bold(), " to create ".into()]))
-            .title_alignment(Alignment::Center);
+            .title_alignment(HorizontalAlignment::Center);
 
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
