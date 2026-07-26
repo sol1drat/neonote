@@ -1,6 +1,6 @@
 use crate::{
     app::App,
-    types::{AppState, ConfirmPrompt, ConfirmSubject, FocusedTab},
+    types::{ConfirmPrompt, ConfirmSubject},
 };
 
 impl App {
@@ -21,6 +21,4 @@ impl App {
             subject: ConfirmSubject::Exit,
         });
     }
-
-    pub fn apply_cursor_shape(&mut self) {}
 }

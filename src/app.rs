@@ -5,7 +5,7 @@ use crossterm::{
     event::{self, Event, KeyEventKind},
     execute,
 };
-use edtui::{EditorEventHandler, EditorMode, EditorState};
+use edtui::{EditorEventHandler, EditorState};
 use ratatui::{Terminal, backend::CrosstermBackend, widgets::ListState};
 
 use crate::{
@@ -31,7 +31,7 @@ pub struct App {
     pub editor_handler: EditorEventHandler,
     pub current_note: PathBuf,
     pub saved_content: String,
-    pub last_cursor_mode: Option<EditorMode>,
+    pub last_cursor_mode: SetCursorStyle,
     pub need_help: bool,
 }
 
@@ -91,7 +91,7 @@ impl App {
             editor_handler: EditorEventHandler::default(),
             current_note: PathBuf::new(),
             saved_content: String::new(),
-            last_cursor_mode: None,
+            last_cursor_mode: SetCursorStyle::DefaultUserShape,
             need_help: false,
         };
 

@@ -6,28 +6,26 @@ use crate::{
     types::{AppState, FocusedTab},
 };
 
+use crossterm::{cursor::SetCursorStyle, execute};
 use edtui::EditorMode;
 
 impl App {
     pub fn draw(&mut self, frame: &mut ratatui::Frame) {
-        let want = if matches!(self.state, AppState::Note)
+        let cursor_style = if matches!(self.state, AppState::Note)
             && matches!(self.focused_tab, FocusedTab::Editor)
         {
-            Some(self.editor.mode)
+            match self.editor.mode {
+                EditorMode::Normal => SetCursorStyle::SteadyBlock,
+                EditorMode::Insert => SetCursorStyle::SteadyBar,
+                EditorMode::Visual | EditorMode::Search => SetCursorStyle::SteadyUnderScore,
+            }
         } else {
-            None
+            SetCursorStyle::DefaultUserShape
         };
 
-        if want != self.last_cursor_mode {
-            let style = match want {
-                Some(EditorMode::Normal) => SetCursorStyle::SteadyBlock,
-                Some(EditorMode::Insert) => SetCursorStyle::SteadyBar,
-                Some(EditorMode::Visual) => SetCursorStyle::SteadyUnderScore,
-                Some(EditorMode::Search) => SetCursorStyle::SteadyUnderScore,
-                None => SetCursorStyle::DefaultUserShape,
-            };
-            let _ = execute!(io::stdout(), style);
-            self.last_cursor_mode = want;
+        if cursor_style != self.last_cursor_mode {
+            let _ = execute!(std::io::stdout(), cursor_style);
+            self.last_cursor_mode = cursor_style;
         }
 
         match self.state {
