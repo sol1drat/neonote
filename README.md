@@ -1,10 +1,8 @@
 # NeoNote
 
-A keyboard-first note app for people who live in the terminal.
+A note app for people who live in the terminal.
 
 ![NeoNote Demo](docs/demo.gif)
-
-*NeoNote is currently in a barely enough usable state, do not expect much.*
 
 ## Install
 

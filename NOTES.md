@@ -15,7 +15,7 @@
 - [ ] Improve renaming cursor positioning
 - [X] Remove NeoNote border in note menu
 
-- [ ] Update the demo for README.md
+- [X] Update demo.gif
 - [ ] Deleting/renaming during vault selection
 
 - [ ] File/dir moving
@@ -32,7 +32,11 @@
 
 # Bugs
 
-- [ ] Fix file rename cursor positioning
+- [ ] Fix early vault caching
+- [ ] Fix editor not updating when renaming currently open file
+- [ ] Editor text coloring
+
+- [X] Fix file rename cursor positioning
 
 - [X] Deleting all files and leaving only dirs doesn't allow to make new files in the root dir
     - Fix Options:
