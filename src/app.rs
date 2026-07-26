@@ -1,12 +1,18 @@
-use std::{fs, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
-use crossterm::{cursor::SetCursorStyle, execute};
+use crossterm::{
+    cursor::SetCursorStyle,
+    event::{self, Event, KeyEventKind},
+    execute,
+};
 use edtui::{EditorEventHandler, EditorMode, EditorState};
-use ratatui::widgets::ListState;
+use ratatui::{Terminal, backend::CrosstermBackend, widgets::ListState};
 
-use crate::cache::{cache_exists, get_vault};
-use crate::types::{
-    AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab, NoteItem,
+use crate::{
+    cache::{cache_exists, get_vault},
+    types::{
+        AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRename, FocusedTab, NoteItem,
+    },
 };
 
 pub struct App {
@@ -30,11 +36,24 @@ pub struct App {
 }
 
 impl App {
+    pub fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
+        while !self.exit {
+            terminal.draw(|f| self.draw(f))?;
+            if let Event::Key(k) = event::read()?
+                && k.kind == KeyEventKind::Press
+            {
+                self.update(k);
+            }
+        }
+        execute!(io::stdout(), SetCursorStyle::DefaultUserShape)?;
+        Ok(())
+    }
+
     pub fn new(vault: PathBuf) -> Self {
         let vault_passed = !vault.as_os_str().is_empty();
 
         let current_vault = if vault_passed {
-            fs::canonicalize(&vault).unwrap_or(vault)
+            std::fs::canonicalize(&vault).unwrap_or(vault)
         } else if cache_exists() {
             get_vault().unwrap_or_default()
         } else {
@@ -81,71 +100,5 @@ impl App {
         }
 
         app
-    }
-
-    pub fn select_next(&mut self) {
-        let i = self.list_state.selected().unwrap_or(0);
-        self.list_state.select(Some(i.saturating_add(1)));
-    }
-
-    pub fn select_previous(&mut self) {
-        if let Some(i) = self.list_state.selected() {
-            self.list_state.select(Some(i.saturating_sub(1)));
-        }
-    }
-
-    pub fn confirm_exit(&mut self) {
-        self.confirm = Some(ConfirmPrompt {
-            message: "Are you sure you want to quit?".into(),
-            subject: ConfirmSubject::Exit,
-        });
-    }
-
-    pub fn view(&mut self, frame: &mut ratatui::Frame) {
-        self.apply_cursor_shape();
-
-        match self.state {
-            AppState::Menu => self.menu(frame),
-            AppState::VaultSelect => self.vault_select(frame),
-            AppState::Note => self.note(frame),
-        }
-
-        if self.need_help {
-            self.draw_help(frame, frame.area());
-        }
-
-        if let Some(prompt) = &self.confirm {
-            self.draw_confirm(frame, frame.area(), prompt);
-        }
-
-        if let Some(prompt) = &self.file_create {
-            self.draw_file_create(frame, frame.area(), prompt);
-        }
-
-        if let Some(prompt) = &self.file_rename {
-            self.draw_file_rename(frame, frame.area(), prompt);
-        }
-    }
-
-    fn apply_cursor_shape(&mut self) {
-        let want = if matches!(self.state, AppState::Note)
-            && matches!(self.focused_tab, FocusedTab::Editor)
-        {
-            Some(self.editor.mode)
-        } else {
-            None
-        };
-
-        if want != self.last_cursor_mode {
-            let style = match want {
-                Some(EditorMode::Normal) => SetCursorStyle::SteadyBlock,
-                Some(EditorMode::Insert) => SetCursorStyle::SteadyBar,
-                Some(EditorMode::Visual) => SetCursorStyle::SteadyUnderScore,
-                Some(EditorMode::Search) => SetCursorStyle::SteadyUnderScore,
-                None => SetCursorStyle::DefaultUserShape,
-            };
-            let _ = execute!(io::stdout(), style);
-            self.last_cursor_mode = want;
-        }
     }
 }
