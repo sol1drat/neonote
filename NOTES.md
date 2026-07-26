@@ -9,11 +9,12 @@
 
 - [X] Cache last opened vault
 - [ ] Add vault switching in app
-- [ ] Editor text background color
+- [ ] Fix editor text background color
 - [X] Make creating a file create a Markdown file by default
 - [X] Remove .md from editor in file name display
+- [ ] Improve renaming cursor positioning
 
-- [ ] Record a better demo for the README.md
+- [X] Record a better demo for the README.md
 - [ ] Deleting/renaming during vault selection
 
 - [ ] File/dir moving

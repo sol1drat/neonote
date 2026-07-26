@@ -264,7 +264,7 @@ impl App {
                                 .path
                                 .file_name()
                                 .map_or(String::new(), |n| n.to_string_lossy().to_string()),
-                            cursor_position: item.path.file_name().map_or(0, |n| n.len()),
+                            cursor_position: item.path.file_name().map_or(0, |n| n.len() - 3),
                         });
                     }
                 }
