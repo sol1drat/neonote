@@ -63,7 +63,7 @@ impl App {
                 let path = entry.path();
                 if path
                     .file_name()
-                    .map_or(false, |n| n.to_str().map_or(false, |s| s.starts_with('.')))
+                    .is_some_and(|n| n.to_str().is_some_and(|s| s.starts_with('.')))
                 {
                     continue;
                 }
@@ -149,7 +149,7 @@ impl App {
                     let child_path = entry.path();
                     if child_path
                         .file_name()
-                        .map_or(false, |n| n.to_str().map_or(false, |s| s.starts_with('.')))
+                        .is_some_and(|n| n.to_str().is_some_and(|s| s.starts_with('.')))
                     {
                         continue;
                     }

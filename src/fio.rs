@@ -47,8 +47,8 @@ impl App {
     }
 
     pub fn creation_base_dir(&self) -> PathBuf {
-        if let Some(idx) = self.list_state.selected() {
-            if let Some(item) = self.note_files.get(idx) {
+        if let Some(idx) = self.list_state.selected()
+            && let Some(item) = self.note_files.get(idx) {
                 if item.is_dir {
                     return item.path.clone();
                 } else {
@@ -59,7 +59,6 @@ impl App {
                         .to_path_buf();
                 }
             }
-        }
         self.current_vault.clone()
     }
 }

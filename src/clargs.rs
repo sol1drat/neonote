@@ -23,7 +23,7 @@ pub fn parse_args() -> PathBuf {
                 exit(0);
             }
             other if other.starts_with('-') => {
-                eprintln!("{}", invalid_option_error(&other, &args[0]));
+                eprintln!("{}", invalid_option_error(other, &args[0]));
                 exit(1);
             }
             _ => {}

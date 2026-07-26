@@ -11,11 +11,8 @@ use crate::types::{AppState, ConfirmPrompt, ConfirmSubject, FileCreate, FileRena
 impl App {
     pub fn update(&mut self, key: KeyEvent) {
         if self.need_help {
-            match key.code {
-                KeyCode::Esc => {
-                    self.need_help = false;
-                }
-                _ => {}
+            if key.code == KeyCode::Esc {
+                self.need_help = false;
             }
             return;
         }
@@ -118,26 +115,23 @@ impl App {
                     }
                 }
                 KeyCode::Backspace => {
-                    if let Some(p) = self.file_create.as_mut() {
-                        if p.cursor_position > 0 {
+                    if let Some(p) = self.file_create.as_mut()
+                        && p.cursor_position > 0 {
                             p.input.remove(p.cursor_position - 1);
                             p.cursor_position -= 1;
                         }
-                    }
                 }
                 KeyCode::Left => {
-                    if let Some(p) = self.file_create.as_mut() {
-                        if p.cursor_position > 0 {
+                    if let Some(p) = self.file_create.as_mut()
+                        && p.cursor_position > 0 {
                             p.cursor_position -= 1;
                         }
-                    }
                 }
                 KeyCode::Right => {
-                    if let Some(p) = self.file_create.as_mut() {
-                        if p.cursor_position < p.input.len() {
+                    if let Some(p) = self.file_create.as_mut()
+                        && p.cursor_position < p.input.len() {
                             p.cursor_position += 1;
                         }
-                    }
                 }
                 _ => {}
             }
@@ -176,26 +170,23 @@ impl App {
                     }
                 }
                 KeyCode::Backspace => {
-                    if let Some(p) = self.file_rename.as_mut() {
-                        if p.cursor_position > 0 {
+                    if let Some(p) = self.file_rename.as_mut()
+                        && p.cursor_position > 0 {
                             p.input.remove(p.cursor_position - 1);
                             p.cursor_position -= 1;
                         }
-                    }
                 }
                 KeyCode::Left => {
-                    if let Some(p) = self.file_rename.as_mut() {
-                        if p.cursor_position > 0 {
+                    if let Some(p) = self.file_rename.as_mut()
+                        && p.cursor_position > 0 {
                             p.cursor_position -= 1;
                         }
-                    }
                 }
                 KeyCode::Right => {
-                    if let Some(p) = self.file_rename.as_mut() {
-                        if p.cursor_position < p.input.len() {
+                    if let Some(p) = self.file_rename.as_mut()
+                        && p.cursor_position < p.input.len() {
                             p.cursor_position += 1;
                         }
-                    }
                 }
                 _ => {}
             }
@@ -299,8 +290,8 @@ impl App {
                 }
                 KeyCode::Enter => {
                     let _ = self.save_current_note();
-                    if let Some(idx) = self.list_state.selected() {
-                        if let Some(item) = self.note_files.get(idx) {
+                    if let Some(idx) = self.list_state.selected()
+                        && let Some(item) = self.note_files.get(idx) {
                             if item.is_dir {
                                 self.toggle_expand(idx);
                             } else if let Ok(contents) = fs::read_to_string(&item.path) {
@@ -309,7 +300,6 @@ impl App {
                                 self.focused_tab = FocusedTab::Editor;
                             }
                         }
-                    }
                 }
                 _ => {}
             }
@@ -342,28 +332,24 @@ impl App {
             (AppState::VaultSelect, KeyCode::Char('j')) => self.select_next(),
             (AppState::VaultSelect, KeyCode::Char('k')) => self.select_previous(),
             (AppState::VaultSelect, KeyCode::Char('l')) => {
-                if let Some(idx) = self.list_state.selected() {
-                    if let Some(dir_path) = self.vault_files.get(idx) {
-                        if let Ok(full_path) = fs::canonicalize(dir_path) {
+                if let Some(idx) = self.list_state.selected()
+                    && let Some(dir_path) = self.vault_files.get(idx)
+                        && let Ok(full_path) = fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.travdir(self.current_dir.clone());
                             self.list_state.select(Some(0));
                         }
-                    }
-                }
             }
             (AppState::VaultSelect, KeyCode::Enter) => {
-                if let Some(idx) = self.list_state.selected() {
-                    if let Some(dir_path) = self.vault_files.get(idx) {
-                        if let Ok(full_path) = fs::canonicalize(dir_path) {
+                if let Some(idx) = self.list_state.selected()
+                    && let Some(dir_path) = self.vault_files.get(idx)
+                        && let Ok(full_path) = fs::canonicalize(dir_path) {
                             self.current_dir = full_path.clone();
                             self.confirm = Some(ConfirmPrompt {
                                 message: format!("Open {} as a vault?", full_path.display()),
                                 subject: ConfirmSubject::Vault,
                             });
                         }
-                    }
-                }
             }
             (AppState::VaultSelect, KeyCode::Char('c')) => {
                 self.file_create = Some(FileCreate {

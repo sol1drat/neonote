@@ -26,11 +26,10 @@ fn main() -> io::Result<()> {
 
     while !app.exit {
         terminal.draw(|frame| app.view(frame))?;
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
+        if let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press {
                 app.update(key);
             }
-        }
     }
 
     execute!(io::stdout(), SetCursorStyle::DefaultUserShape)?;

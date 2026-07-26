@@ -189,11 +189,10 @@ impl App {
 
         frame.render_widget(EditorView::new(&mut self.editor).theme(theme), content_area);
 
-        if matches!(self.focused_tab, FocusedTab::Editor) {
-            if let Some(pos) = self.editor.cursor_screen_position() {
+        if matches!(self.focused_tab, FocusedTab::Editor)
+            && let Some(pos) = self.editor.cursor_screen_position() {
                 frame.set_cursor_position(pos);
             }
-        }
     }
 
     fn centered_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -341,11 +340,7 @@ impl App {
         let visible_width = input_area.width as usize;
         let mut cursor_offset = prompt.cursor_position.min(prompt.input.len());
 
-        let display_start = if cursor_offset > visible_width {
-            cursor_offset - visible_width
-        } else {
-            0
-        };
+        let display_start = cursor_offset.saturating_sub(visible_width);
 
         let chars: Vec<char> = prompt.input.chars().collect();
         let display_end = (display_start + visible_width).min(chars.len());
@@ -387,11 +382,7 @@ impl App {
         let visible_width = input_area.width as usize;
         let mut cursor_offset = prompt.cursor_position.min(prompt.input.len());
 
-        let display_start = if cursor_offset > visible_width {
-            cursor_offset - visible_width
-        } else {
-            0
-        };
+        let display_start = cursor_offset.saturating_sub(visible_width);
 
         let chars: Vec<char> = prompt.input.chars().collect();
         let display_end = (display_start + visible_width).min(chars.len());
