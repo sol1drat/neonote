@@ -9,6 +9,7 @@
 
 - [X] Cache last opened vault
 - [ ] Add vault switching in app
+- [ ] Editor text background color
 
 - [ ] Record a better demo for the README.md
 - [ ] Deleting/renaming during vault selection
