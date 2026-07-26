@@ -15,7 +15,7 @@
 - [ ] Improve renaming cursor positioning
 - [X] Remove NeoNote border in note menu
 
-- [X] Record a better demo for the README.md
+- [ ] Update the demo for README.md
 - [ ] Deleting/renaming during vault selection
 
 - [ ] File/dir moving

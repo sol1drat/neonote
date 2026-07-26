@@ -182,7 +182,10 @@ impl App {
             .style(Style::default().bg(Color::Reset))
             .border_style(editor_border_style);
 
-        let theme = EditorTheme::default().block(editor_block).hide_cursor();
+        let theme = EditorTheme::default()
+            .block(editor_block)
+            .base(Style::default().bg(Color::Reset))
+            .hide_cursor();
 
         frame.render_widget(EditorView::new(&mut self.editor).theme(theme), content_area);
 

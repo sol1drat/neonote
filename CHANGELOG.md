@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-
+- Black editor text background
 
 ## [0.3.2] - 2026-07-23
 
