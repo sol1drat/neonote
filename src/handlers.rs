@@ -84,7 +84,7 @@ impl App {
                     self.file_create = None;
 
                     if !name.is_empty() {
-                        let new_path = base.join(&name);
+                        let new_path = base.join(format!("{}{}", name, ".md"));
                         if is_dir {
                             let _ = fs::create_dir(&new_path);
                         } else {
@@ -249,7 +249,7 @@ impl App {
                 KeyCode::Char('f') => {
                     let base = self.creation_base_dir();
                     self.file_create = Some(FileCreate {
-                        message: "Create File".into(),
+                        message: "Create Note".into(),
                         path: base,
                         is_dir: false,
                         input: String::new(),

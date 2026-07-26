@@ -20,11 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deprecated Alignment for new HorizontalAlignment
 - Keybinding for switching focus between file explorer and editor
 - Markdown file extestions do not get rendered
+- File creation creates only Markdown files. File name gets '.md' appened
 
 ### Removed
 
 - Save on Ctrl+s
 - Showing * on file change
+- Showing .md in editor file name
 
 ### Fixed
 

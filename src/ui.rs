@@ -168,7 +168,7 @@ impl App {
 
         let note_file_name = self
             .current_note
-            .file_name()
+            .file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
