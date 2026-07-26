@@ -11,6 +11,7 @@
 - [ ] Add vault switching in app
 - [ ] Editor text background color
 - [ ] Make creating a file create a Markdown file by default
+- [ ] Remove .md from editor in file name display
 
 - [ ] Record a better demo for the README.md
 - [ ] Deleting/renaming during vault selection
