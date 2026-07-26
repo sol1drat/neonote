@@ -1,7 +1,6 @@
 # NeoNote
 
-A simple, no bullshit, keyboard-first note app
-for people who live in the terminal.
+A keyboard-first note app for people who live in the terminal.
 
 ![NeoNote Demo](docs/demo.gif)
 
