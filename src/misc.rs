@@ -22,25 +22,5 @@ impl App {
         });
     }
 
-    pub fn apply_cursor_shape(&mut self) {
-        let want = if matches!(self.state, AppState::Note)
-            && matches!(self.focused_tab, FocusedTab::Editor)
-        {
-            Some(self.editor.mode)
-        } else {
-            None
-        };
-
-        if want != self.last_cursor_mode {
-            let style = match want {
-                Some(EditorMode::Normal) => SetCursorStyle::SteadyBlock,
-                Some(EditorMode::Insert) => SetCursorStyle::SteadyBar,
-                Some(EditorMode::Visual) => SetCursorStyle::SteadyUnderScore,
-                Some(EditorMode::Search) => SetCursorStyle::SteadyUnderScore,
-                None => SetCursorStyle::DefaultUserShape,
-            };
-            let _ = execute!(io::stdout(), style);
-            self.last_cursor_mode = want;
-        }
-    }
+    pub fn apply_cursor_shape(&mut self) {}
 }

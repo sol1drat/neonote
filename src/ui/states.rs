@@ -1,4 +1,16 @@
-use crate::app::App;
+use edtui::{EditorTheme, EditorView};
+use ratatui::{
+    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin},
+    style::{Color, Modifier, Style, Stylize},
+    text::Line,
+    widgets::{Block, List, ListItem, Paragraph},
+};
+
+use crate::{
+    app::App,
+    constants::{DESCRIPTION, TITLE},
+    types::FocusedTab,
+};
 
 impl App {
     pub fn menu(&mut self, frame: &mut ratatui::Frame) {
