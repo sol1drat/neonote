@@ -9,10 +9,10 @@
 
 - [X] Cache last opened vault
 - [ ] Add vault switching in app
-- [ ] Fix editor text background color
+- [X] Fix editor text background color
 - [X] Make creating a file create a Markdown file by default
 - [X] Remove .md from editor in file name display
-- [ ] Improve renaming cursor positioning
+- [X] Improve renaming cursor positioning
 - [X] Remove NeoNote border in note menu
 
 - [X] Update demo.gif
@@ -34,7 +34,7 @@
 
 - [ ] Fix early vault caching
 - [ ] Fix editor not updating when renaming currently open file
-- [ ] Editor text coloring
+- [X] Editor text coloring
 
 - [X] Fix file rename cursor positioning
 
