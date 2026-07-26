@@ -32,6 +32,8 @@
 
 # Bugs
 
+- [ ] Fix file rename cursor positioning
+
 - [X] Deleting all files and leaving only dirs doesn't allow to make new files in the root dir
     - Fix Options:
         1. Create all files/dirs in root dir and implement file/dir moving

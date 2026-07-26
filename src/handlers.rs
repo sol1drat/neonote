@@ -264,7 +264,22 @@ impl App {
                                 .path
                                 .file_name()
                                 .map_or(String::new(), |n| n.to_string_lossy().to_string()),
-                            cursor_position: item.path.file_name().map_or(0, |n| n.len() - 3),
+                            cursor_position: {
+                                if item.is_dir {
+                                    item.path.file_name().map_or(0, |n| n.len())
+                                } else {
+                                    if let Some(idx) = item
+                                        .path
+                                        .file_name()
+                                        .map_or(String::new(), |n| n.to_string_lossy().to_string())
+                                        .rfind('.')
+                                    {
+                                        idx
+                                    } else {
+                                        item.path.file_name().map_or(0, |n| n.len())
+                                    }
+                                }
+                            },
                         });
                     }
                 }
