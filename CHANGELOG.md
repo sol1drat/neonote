@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+
+
+### Changed
+
+
+
+### Removed
+
+
+
+### Fixed
+
+
+
+## [0.3.3] - 2026-07-26
+
+### Added
+
 - Help screen for keybindings
 - Renaming now shows current file name and cursor is positioned at the end
 - Auto-save
