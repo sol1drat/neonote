@@ -13,7 +13,7 @@
 - [X] Make creating a file create a Markdown file by default
 - [X] Remove .md from editor in file name display
 - [ ] Improve renaming cursor positioning
-- [ ] Remove NeoNote border in note menu
+- [X] Remove NeoNote border in note menu
 
 - [X] Record a better demo for the README.md
 - [ ] Deleting/renaming during vault selection

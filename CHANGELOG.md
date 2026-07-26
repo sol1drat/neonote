@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Save on Ctrl+s
 - Showing * on file change
 - Showing .md in editor file name
+- NeoNote border
 
 ### Fixed
 

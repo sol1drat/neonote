@@ -85,17 +85,10 @@ impl App {
     }
 
     pub fn note(&mut self, frame: &mut ratatui::Frame) {
-        let outer = frame.area();
-        let outer_block = Block::bordered()
-            .title(format!(" {} ", TITLE))
-            .title_alignment(HorizontalAlignment::Center);
-        let inner = outer_block.inner(outer);
-        frame.render_widget(outer_block, outer);
-
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-            .split(inner);
+            .split(frame.area());
         let explorer_area = layout[0];
         let content_area = layout[1];
 
